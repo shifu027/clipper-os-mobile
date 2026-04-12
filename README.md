@@ -105,19 +105,18 @@ See [docs/app-store-checklist.md](docs/app-store-checklist.md) for full App Stor
 
 The Gemini AI feature is **disabled by default** in production builds for security.
 
-To enable during development:
+To enable the Gemini tab during development:
 ```bash
 # Create .env file
 VITE_GEMINI_ENABLED=true
-VITE_GEMINI_API_KEY=your-api-key-here
 ```
 
-**Important**: Never commit API keys. The `.env` file is in `.gitignore`. For production mobile apps, Gemini integration should be routed through a backend server to avoid exposing API keys in the client.
+**Important**: The Gemini integration requires a backend proxy server to call the Gemini API. API keys must never be embedded in client-side code. When the feature is enabled, the app expects a backend endpoint (e.g., `/api/gemini/generate`) to handle API communication securely.
 
 ### Release-Mode Behavior
 - Gemini tab shows a placeholder message explaining the feature is unavailable
 - No API keys are embedded in the production bundle
-- The feature can be enabled via environment variables for development/testing
+- No direct calls to external AI APIs from client code
 
 ## Project Structure
 

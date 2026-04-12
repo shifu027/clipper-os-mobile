@@ -12,6 +12,5 @@ export default defineConfig({
   },
   define: {
     __GEMINI_ENABLED__: JSON.stringify(process.env.VITE_GEMINI_ENABLED === 'true'),
-    __GEMINI_API_KEY__: JSON.stringify(process.env.VITE_GEMINI_API_KEY || ''),
   },
 });

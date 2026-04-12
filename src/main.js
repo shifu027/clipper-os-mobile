@@ -380,37 +380,22 @@ const ClipperApp = {
 
     // Check if Gemini is enabled via environment variable
     const geminiEnabled = typeof __GEMINI_ENABLED__ !== 'undefined' ? __GEMINI_ENABLED__ : false;
-    const apiKey = typeof __GEMINI_API_KEY__ !== 'undefined' ? __GEMINI_API_KEY__ : '';
 
-    if (!geminiEnabled || !apiKey) {
+    if (!geminiEnabled) {
       resultEl.classList.remove('hidden');
       outputEl.textContent =
-        'Gemini AI não está disponível neste build. Configure as variáveis de ambiente para habilitar esta funcionalidade.';
+        'Gemini AI não está disponível neste build. Para habilitar, configure um servidor backend como proxy para a API Gemini.';
       return;
     }
 
     outputEl.textContent = 'Gerando...';
     resultEl.classList.remove('hidden');
 
-    fetch(
-      'https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=' +
-        apiKey,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: promptText }] }],
-        }),
-      }
-    )
-      .then((r) => r.json())
-      .then((data) => {
-        const text = data?.candidates?.[0]?.content?.parts?.[0]?.text || 'Sem resposta.';
-        outputEl.textContent = text;
-      })
-      .catch((err) => {
-        outputEl.textContent = 'Erro: ' + err.message;
-      });
+    // In production, requests should go through a backend proxy
+    // to avoid exposing API keys in the client bundle.
+    // Example: fetch('/api/gemini/generate', { ... })
+    outputEl.textContent =
+      'Gemini AI requer um servidor backend configurado. Consulte a documentação para instruções de configuração.';
   },
 
   isValidUrl(string) {
