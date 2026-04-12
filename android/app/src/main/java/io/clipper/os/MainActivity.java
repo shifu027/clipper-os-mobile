@@ -1,4 +1,4 @@
-package com.seudominio.clipperos;
+package io.clipper.os;
 
 import com.getcapacitor.BridgeActivity;
 
