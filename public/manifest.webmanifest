@@ -1,7 +1,8 @@
 {
   "name": "Clipper OS",
   "short_name": "Clipper OS",
-  "description": "Content management app for social media workflow",
+  "id": "io.clipper.os",
+  "description": "Content management app for social media creators and clipper workflows",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#f9fafb",

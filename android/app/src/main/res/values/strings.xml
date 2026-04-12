@@ -2,6 +2,6 @@
 <resources>
     <string name="app_name">Clipper OS</string>
     <string name="title_activity_main">Clipper OS</string>
-    <string name="package_name">com.seudominio.clipperos</string>
-    <string name="custom_url_scheme">com.seudominio.clipperos</string>
+    <string name="package_name">io.clipper.os</string>
+    <string name="custom_url_scheme">io.clipper.os</string>
 </resources>
