@@ -27,6 +27,16 @@
 - [x] PWA manifest configured
 - [x] Web app icons in public/icons/
 
+## CI/CD & Automation ✅
+
+- [x] GitHub Actions — Android AAB build workflow (`.github/workflows/build-android.yml`)
+- [x] GitHub Actions — iOS Capacitor sync workflow (`.github/workflows/build-ios.yml`)
+- [x] GitHub Actions — Automated release workflow (`.github/workflows/release.yml`)
+- [x] Release preparation script (`scripts/prepare-release.sh`)
+- [x] Android keystore generation script (`scripts/generate-keystore.sh`)
+- [x] GitHub Secrets documentation (`docs/github-secrets-setup.md`)
+- [ ] Configure GitHub Secrets: `KEYSTORE_BASE64`, `KEYSTORE_PASSWORD`, `KEY_ALIAS`, `KEY_PASSWORD`
+
 ## Before Release — Design Assets
 
 - [ ] Replace placeholder app icons with final design (use `resources/icon.svg` as base)
@@ -69,18 +79,20 @@
 
 ### Store Listing Content
 
-- [ ] App title: "Clipper OS" (max 30 chars)
-- [ ] Short description (max 80 chars): "Content management for social media creators"
-- [ ] Full description (max 4000 chars)
-- [ ] Keywords (App Store, up to 100 chars)
-- [ ] Category: Productivity
+- [x] App title: "Clipper OS" (max 30 chars) — see `docs/store-listing.md`
+- [x] Short description (max 80 chars) — see `docs/store-listing.md`
+- [x] Full description (max 4000 chars) — see `docs/store-listing.md`
+- [x] Keywords (App Store, up to 100 chars) — see `docs/store-listing.md`
+- [x] Category: Productivity — see `docs/store-listing.md`
 - [ ] Content rating questionnaire completed
-- [ ] Contact email address
+- [ ] Contact email address — update placeholder in `docs/store-listing.md`
 
 ### Privacy & Legal
 
-- [ ] Privacy policy URL hosted and accessible
-- [ ] Terms of service URL (recommended)
+- [x] Privacy policy created — `public/privacy-policy.html` (EN + PT)
+- [ ] Privacy policy URL hosted and accessible — deploy `public/privacy-policy.html`
+- [x] Terms of service created — `public/terms-of-service.html` (EN + PT)
+- [ ] Terms of service URL hosted and accessible — deploy `public/terms-of-service.html`
 - [ ] Data safety form completed (Google Play)
 - [ ] App privacy details completed (App Store Connect)
 - [x] No client-side API keys in release build

@@ -1,0 +1,51 @@
+name: Build iOS (Capacitor Sync Check)
+
+# NOTE: Full iOS archive/distribution requires macOS + Apple certificates.
+# This workflow validates the Capacitor sync and web build only.
+# To produce an IPA for the App Store, open ios/App/App.xcworkspace in Xcode
+# on a Mac with your provisioning profiles configured, then archive via
+# Product → Archive.
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  sync:
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build web assets
+        run: npm run build
+
+      - name: Install Capacitor CLI
+        run: npm install -g @capacitor/cli
+
+      - name: Sync Capacitor iOS
+        run: npx cap sync ios
+
+      - name: Verify iOS files were synced
+        run: |
+          echo "=== Verifying iOS sync output ==="
+          ls -la ios/App/App/public/ | head -20
+          echo "✅ iOS sync completed successfully."
+          echo ""
+          echo "ℹ️  To create a release build for the App Store:"
+          echo "   1. Open Xcode: npx cap open ios"
+          echo "   2. Select your signing team and provisioning profile"
+          echo "   3. Product → Archive"
+          echo "   4. Distribute App → App Store Connect"
