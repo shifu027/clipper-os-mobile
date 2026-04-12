@@ -1,6 +1,6 @@
 import './styles.css';
 import { NotificationManager } from './notifications.js';
-import { SyncManager } from './firebase.js';
+import { SyncManager } from './supabase.js';
 import { CalendarManager } from './calendar.js';
 
 /**
@@ -51,7 +51,7 @@ const PLATFORMS = ['TikTok', 'Instagram Reels', 'YouTube Shorts', 'LinkedIn', 'F
 const TAGS = ['viral', 'sales', 'engagement', 'evergreen', 'tutorial', 'reusable', 'trending'];
 
 async function loadState() {
-  // 1. Try loading from Firestore (if configured)
+  // 1. Try loading from Supabase (if configured)
   try {
     const cloudState = await SyncManager.load();
     if (cloudState) return migrateState({ ...DEFAULT_STATE, ...cloudState });
@@ -188,7 +188,7 @@ const App = {
   ],
 
   async init() {
-    // Initialise Firebase sync (no-op when env vars are absent)
+    // Initialise Supabase sync (no-op when env vars are absent)
     const syncEnabled = await SyncManager.init();
 
     if (syncEnabled) {
@@ -860,11 +860,11 @@ const App = {
                        <button data-action="copy-sync-id" class="text-xs bg-blue-600 text-white font-bold px-3 py-2 rounded-lg hover:bg-blue-700 transition-colors whitespace-nowrap">Copy ID</button>
                      </div>
                    </div>
-                   <p class="text-xs text-slate-400 text-center">Your data is automatically synced when Firebase is configured</p>
+                   <p class="text-xs text-slate-400 text-center">Your data is automatically synced when Supabase is configured</p>
                  </div>`
               : `<div class="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 text-center">
-                   <p class="text-sm text-amber-700 font-medium">Configure Firebase in <code class="bg-amber-100 px-1 rounded">.env</code> to enable sync</p>
-                   <p class="text-xs text-amber-500 mt-1">See <code class="bg-amber-100 px-1 rounded">docs/firebase-setup.md</code> for instructions</p>
+                   <p class="text-sm text-amber-700 font-medium">Configure Supabase in <code class="bg-amber-100 px-1 rounded">.env</code> to enable sync</p>
+                   <p class="text-xs text-amber-500 mt-1">See <code class="bg-amber-100 px-1 rounded">docs/supabase-setup.md</code> for instructions</p>
                  </div>`
             }
           </div>
