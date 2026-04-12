@@ -1,10 +1,10 @@
 apply plugin: 'com.android.application'
 
 android {
-    namespace = "com.seudominio.clipperos"
+    namespace = "io.clipper.os"
     compileSdk = rootProject.ext.compileSdkVersion
     defaultConfig {
-        applicationId "com.seudominio.clipperos"
+        applicationId "io.clipper.os"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1

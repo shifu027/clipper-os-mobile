@@ -2,106 +2,99 @@
 
 ## Prerequisites
 
-- [ ] Google Play Developer account created ($25 one-time fee)
-- [ ] Android release keystore created and securely stored
-- [ ] App signed with release keystore
+- [ ] Google Play Developer account ($25 one-time fee)
+- [ ] Release keystore created and securely stored
+- [ ] App tested on physical Android device
 
-## Generate Signed AAB
+## Step 1: Generate Signed AAB
 
-1. Build the web assets:
-   ```bash
-   npm run build
-   npx cap sync
-   ```
+```bash
+# Build web assets and sync
+npm run build && npx cap sync
 
-2. Open Android Studio:
-   ```bash
-   npx cap open android
-   ```
+# Open in Android Studio
+npx cap open android
+```
 
-3. In Android Studio:
-   - Go to **Build > Generate Signed Bundle / APK**
-   - Select **Android App Bundle**
-   - Choose or create a keystore:
-     - Keystore path
-     - Keystore password
-     - Key alias
-     - Key password
-   - Select **release** build variant
-   - Click **Finish**
+In Android Studio:
+1. **Build → Generate Signed Bundle / APK**
+2. Select **Android App Bundle**
+3. Choose or create keystore:
+   - First time: create new keystore with `keytool -genkey -v -keystore clipper-os-release.keystore -alias clipper-os -keyalg RSA -keysize 2048 -validity 10000`
+   - Returning: select existing keystore
+4. Select **release** build variant
+5. Click **Finish**
 
-4. The AAB file will be generated at:
-   `android/app/release/app-release.aab`
+Output: `android/app/release/app-release.aab`
 
-## Versioning
+## Step 2: Versioning
 
-Before each upload, update in `android/app/build.gradle`:
+Before each upload, edit `android/app/build.gradle`:
 
 ```gradle
-android {
-    defaultConfig {
-        versionCode 1      // Must increment for each upload
-        versionName "1.0.0" // User-visible version
-    }
+defaultConfig {
+    applicationId "io.clipper.os"
+    versionCode 1      // MUST increment for each upload (1, 2, 3...)
+    versionName "1.0.0" // User-visible version
 }
 ```
 
-## Create App in Google Play Console
+## Step 3: Create App in Google Play Console
 
-1. Go to [Google Play Console](https://play.google.com/console)
-2. Click **Home > Create app**
+1. Go to [play.google.com/console](https://play.google.com/console)
+2. **Home → Create app**
 3. Fill in:
-   - [ ] App name: "Clipper OS"
-   - [ ] Default language
-   - [ ] App or Game: App
-   - [ ] Free or Paid: Free
-   - [ ] Developer contact email
-   - [ ] Accept declarations
+   - App name: **Clipper OS**
+   - Default language: English (or your preference)
+   - App type: **App**
+   - Pricing: **Free**
+   - Developer contact email
+   - Accept declarations
 
-## Store Listing
+## Step 4: Store Listing
 
-- [ ] **Title**: Clipper OS (max 30 chars)
-- [ ] **Short description**: Content management for social media workflow (max 80 chars)
-- [ ] **Full description**: Detailed app description (max 4000 chars)
-- [ ] **App icon**: 512 x 512 PNG (32-bit, no alpha)
-- [ ] **Feature graphic**: 1024 x 500 PNG or JPEG
-- [ ] **Screenshots**: At least 2 phone screenshots (16:9)
-- [ ] **App category**: Productivity or Social
-- [ ] **Contact email**
-- [ ] **Privacy policy URL**
+- **Title**: Clipper OS
+- **Short description**: Content management for social media creators and workflows
+- **Full description**: Write a detailed description of the app's features
+- **App icon**: 512 × 512 PNG (32-bit, no alpha)
+- **Feature graphic**: 1024 × 500 PNG or JPEG
+- **Screenshots**: At least 2 phone screenshots (16:9 ratio)
+- **Category**: Productivity
+- **Contact email**: your email
+- **Privacy policy URL**: your hosted privacy policy
 
-## Content Rating
+## Step 5: Content Rating
 
-- [ ] Complete the content rating questionnaire in Play Console
-- [ ] App will receive a rating based on answers (e.g., PEGI, ESRB)
+- Complete the content rating questionnaire in Play Console
+- Expected rating: Everyone (no violent or mature content)
 
-## Data Safety
+## Step 6: Data Safety
 
-- [ ] Complete the Data Safety form
-- [ ] Declare data collection practices:
-  - This app uses localStorage only (no server-side data collection in v1)
-  - If Gemini AI is enabled, document API usage
+Complete the Data Safety form:
+- **Data collected**: None transmitted to servers
+- **Data shared**: None
+- **Encryption**: Data stored locally on device only
+- **Data deletion**: Users can reset data in app settings
 
-## Release Track
+If Gemini AI is enabled in a future version, update to declare API usage.
 
-Choose one:
-- [ ] **Internal testing**: Up to 100 testers, no review needed
-- [ ] **Closed testing**: Selected group, requires review
-- [ ] **Open testing**: Public beta, requires review
-- [ ] **Production**: Full public release, requires review
+## Step 7: Release
 
-## Upload & Submit
+Recommended release order:
+1. **Internal testing** (up to 100 testers, instant)
+2. **Closed testing** (selected group, requires review)
+3. **Production** (full release, requires review)
 
-1. Go to **Release > Production** (or chosen track)
-2. Click **Create new release**
+To release:
+1. Go to **Release → Production** (or chosen track)
+2. **Create new release**
 3. Upload the `.aab` file
 4. Add release notes
-5. Click **Review release**
-6. Click **Start rollout**
+5. **Review release → Start rollout**
 
 ## Post-Submission
 
-- [ ] Wait for Google review (typically 1-3 days for new apps)
-- [ ] Monitor for rejection emails
+- [ ] Wait for Google review (1-3 days for new apps)
+- [ ] Monitor rejection emails
 - [ ] Check crash reports in Play Console
 - [ ] Respond to user reviews
