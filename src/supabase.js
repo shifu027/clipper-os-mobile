@@ -4,7 +4,7 @@
  *
  * Requires a `app_state` table in Supabase with the following schema:
  *   CREATE TABLE app_state (
- *     user_id  UUID PRIMARY KEY REFERENCES auth.users(id),
+ *     user_id  UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
  *     state    JSONB NOT NULL DEFAULT '{}',
  *     updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
  *   );
@@ -34,13 +34,13 @@ export const SyncManager = {
       this.client = createClient(url, anonKey);
 
       // Sign in anonymously
-      const { data, error } = await this.client.auth.signInAnonymously();
+      const { data: authData, error } = await this.client.auth.signInAnonymously();
       if (error) {
         console.warn('[SyncManager] Anonymous sign-in failed:', error.message);
         return false;
       }
 
-      this.userId = data.user?.id ?? null;
+      this.userId = authData.user?.id ?? null;
       this.enabled = !!this.userId;
       return this.enabled;
     } catch (e) {
