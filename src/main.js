@@ -1,4 +1,7 @@
 import './styles.css';
+import { NotificationManager } from './notifications.js';
+import { SyncManager } from './firebase.js';
+import { CalendarManager } from './calendar.js';
 
 /**
  * Clipper OS — Content Management Studio
@@ -35,7 +38,7 @@ const STORAGE_KEY = 'clipperOS_StateV2';
 
 const DEFAULT_STATE = {
   currentView: 'dashboard',
-  config: { channel: '', niche: '', frequency: '2', cloudLinks: {}, team: 'Me' },
+  config: { channel: '', niche: '', frequency: '2', cloudLinks: {}, team: 'Me', notificationsEnabled: undefined, calendarAutoAdd: false },
   library: [],
   clips: [],
   routine: [],
@@ -47,7 +50,20 @@ const DEFAULT_STATE = {
 const PLATFORMS = ['TikTok', 'Instagram Reels', 'YouTube Shorts', 'LinkedIn', 'Facebook', 'X / Twitter'];
 const TAGS = ['viral', 'sales', 'engagement', 'evergreen', 'tutorial', 'reusable', 'trending'];
 
-function loadState() {
+async function loadState() {
+  // 1. Try loading from Firestore (if configured)
+  try {
+    const cloudState = await SyncManager.load();
+    if (cloudState) return migrateState({ ...DEFAULT_STATE, ...cloudState });
+  } catch (e) {
+    console.warn('[loadState] Cloud load failed, falling back to localStorage', e);
+  }
+
+  // 2. Fallback: localStorage (existing behaviour)
+  return loadStateSync();
+}
+
+function loadStateSync() {
   const raw = localStorage.getItem(STORAGE_KEY);
   if (raw) {
     try {
@@ -154,11 +170,13 @@ function migrateHistoryItem(item) {
 
 function saveState(state) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  SyncManager.save(state); // fire-and-forget cloud sync
 }
 
 // ─── App Controller ─────────────────────────────────────
 const App = {
-  state: loadState(),
+  state: loadStateSync(),
+  syncStatus: 'offline', // 'offline' | 'syncing' | 'synced'
 
   views: [
     { id: 'dashboard', icon: 'fa-house', name: 'Dashboard' },
@@ -169,10 +187,40 @@ const App = {
     { id: 'gemini', icon: 'fa-wand-magic-sparkles', name: 'AI Studio' },
   ],
 
-  init() {
+  async init() {
+    // Initialise Firebase sync (no-op when env vars are absent)
+    const syncEnabled = await SyncManager.init();
+
+    if (syncEnabled) {
+      // Load from cloud and override localStorage state
+      const cloudState = await SyncManager.load();
+      if (cloudState) {
+        this.state = migrateState({ ...DEFAULT_STATE, ...cloudState });
+        saveState(this.state);
+      }
+      this.syncStatus = 'synced';
+
+      // Subscribe to real-time updates from other devices
+      SyncManager.subscribe((newState) => {
+        this.state = migrateState({ ...this.state, ...newState });
+        saveState(this.state);
+        this.renderNav();
+        this.render();
+        this.showToast('Data synced from another device!', 'info');
+      });
+    }
+
     if (!this.state.config.channel) {
       this.state.currentView = 'setup';
     }
+
+    // Request notification permission if not yet decided
+    if (this.state.config.notificationsEnabled === undefined) {
+      const granted = await NotificationManager.requestPermission();
+      this.state.config.notificationsEnabled = granted;
+      saveState(this.state);
+    }
+
     this.bindGlobalEvents();
     this.renderNav();
     this.render();
@@ -507,11 +555,14 @@ const App = {
             <div class="flex-1 border-l border-slate-100 pl-4 py-1">
               ${asset
                 ? `<div class="flex justify-between items-start">
-                     <div>
+                     <div class="flex-1 min-w-0">
                        <span class="text-[9px] font-bold text-slate-500 uppercase tracking-wider bg-slate-100 px-2 py-0.5 rounded mb-1 inline-block">${escapeHtml(slot.platform)}</span>
-                       <h4 class="text-sm font-bold text-slate-800">${escapeHtml(asset.title)}</h4>
+                       <h4 class="text-sm font-bold text-slate-800 truncate" title="${escapeHtml(asset.title)}">${escapeHtml(asset.title)}</h4>
                      </div>
-                     <button data-action="unschedule" data-id="${slot.id}" class="text-slate-300 hover:text-red-500 p-1"><i class="fa-solid fa-xmark"></i></button>
+                     <div class="flex items-center gap-1 ml-2 shrink-0">
+                       <button data-action="add-to-calendar" data-id="${slot.id}" class="text-slate-300 hover:text-blue-500 w-7 h-7 flex items-center justify-center rounded-lg hover:bg-blue-50 transition-colors" title="Add to Calendar"><i class="fa-solid fa-calendar-plus text-xs"></i></button>
+                       <button data-action="unschedule" data-id="${slot.id}" class="text-slate-300 hover:text-red-500 w-7 h-7 flex items-center justify-center rounded-lg hover:bg-red-50 transition-colors" title="Unschedule"><i class="fa-solid fa-xmark"></i></button>
+                     </div>
                    </div>`
                 : `<div class="flex justify-between items-center">
                      <div class="text-xs text-slate-400 italic">Available slot (${escapeHtml(slot.platform)})</div>
@@ -545,6 +596,9 @@ const App = {
           <h2 class="text-2xl font-bold text-slate-800">Content Pipeline</h2>
           <p class="text-sm text-slate-500 mt-1">Schedule and manage your publishing calendar.</p>
         </div>
+        <button data-action="export-calendar" class="flex items-center gap-1.5 bg-blue-50 hover:bg-blue-100 text-blue-600 border border-blue-200 text-xs font-bold px-3 py-2 rounded-xl transition-colors">
+          <i class="fa-solid fa-calendar-arrow-up"></i> <span class="hidden sm:inline">Export to Calendar</span>
+        </button>
       </div>
 
       <div class="flex gap-2 overflow-x-auto hide-scrollbar pb-2 mb-6 snap-x">
@@ -767,6 +821,54 @@ const App = {
             </div>
           </div>
 
+          <div class="border-t border-slate-100 pt-5 mt-5">
+            <h3 class="text-sm font-bold text-slate-800 mb-3"><i class="fa-solid fa-bell text-amber-500 mr-1"></i> Notifications</h3>
+            <div class="flex items-center justify-between bg-slate-50 rounded-xl px-4 py-3 border border-slate-200">
+              <div>
+                <div class="text-sm font-semibold text-slate-700">Enable posting reminders</div>
+                <div class="text-xs text-slate-400 mt-0.5">Get reminded 15 minutes before each scheduled post</div>
+              </div>
+              <button id="btn-toggle-notifications" data-action="toggle-notifications"
+                class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${c.notificationsEnabled ? 'bg-blue-600' : 'bg-slate-300'}">
+                <span class="inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${c.notificationsEnabled ? 'translate-x-6' : 'translate-x-1'}"></span>
+              </button>
+            </div>
+          </div>
+
+          <div class="border-t border-slate-100 pt-5 mt-5">
+            <h3 class="text-sm font-bold text-slate-800 mb-3"><i class="fa-solid fa-calendar-days text-green-500 mr-1"></i> Calendar</h3>
+            <div class="flex items-center justify-between bg-slate-50 rounded-xl px-4 py-3 border border-slate-200">
+              <div>
+                <div class="text-sm font-semibold text-slate-700">Auto-add to calendar when scheduling</div>
+                <div class="text-xs text-slate-400 mt-0.5">Each new scheduled slot is automatically added to your calendar</div>
+              </div>
+              <button id="btn-toggle-calendar" data-action="toggle-calendar"
+                class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${c.calendarAutoAdd ? 'bg-blue-600' : 'bg-slate-300'}">
+                <span class="inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${c.calendarAutoAdd ? 'translate-x-6' : 'translate-x-1'}"></span>
+              </button>
+            </div>
+          </div>
+
+          <div class="border-t border-slate-100 pt-5 mt-5">
+            <h3 class="text-sm font-bold text-slate-800 mb-3"><i class="fa-solid fa-cloud-arrow-up text-purple-500 mr-1"></i> Cloud Sync</h3>
+            ${SyncManager.enabled
+              ? `<div class="space-y-3">
+                   <div class="bg-slate-50 rounded-xl px-4 py-3 border border-slate-200">
+                     <div class="text-[10px] font-bold text-slate-400 uppercase mb-1">Your Sync ID</div>
+                     <div class="flex items-center gap-2">
+                       <code class="text-xs text-slate-700 flex-1 truncate bg-white border border-slate-200 rounded-lg px-3 py-2">${escapeHtml(SyncManager.userId || '')}</code>
+                       <button data-action="copy-sync-id" class="text-xs bg-blue-600 text-white font-bold px-3 py-2 rounded-lg hover:bg-blue-700 transition-colors whitespace-nowrap">Copy ID</button>
+                     </div>
+                   </div>
+                   <p class="text-xs text-slate-400 text-center">Your data is automatically synced when Firebase is configured</p>
+                 </div>`
+              : `<div class="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 text-center">
+                   <p class="text-sm text-amber-700 font-medium">Configure Firebase in <code class="bg-amber-100 px-1 rounded">.env</code> to enable sync</p>
+                   <p class="text-xs text-amber-500 mt-1">See <code class="bg-amber-100 px-1 rounded">docs/firebase-setup.md</code> for instructions</p>
+                 </div>`
+            }
+          </div>
+
           <button id="btn-save-setup" class="w-full bg-blue-600 text-white font-bold py-4 rounded-xl mt-6 shadow-md hover:bg-blue-700 active:scale-[0.98] transition-all">Save & Enter</button>
           ${c.channel ? `<button id="btn-reset" class="w-full text-slate-400 text-xs font-semibold py-2 mt-2 hover:text-red-500 transition-colors">Reset all data</button>` : ''}
         </div>
@@ -807,6 +909,11 @@ const App = {
         case 'reuse-content': this.reuseContent(id); break;
         case 'set-tool': this.setGeminiTool(btn.dataset.tool); break;
         case 'generate-ai': this.generateWithAI(); break;
+        case 'add-to-calendar': this.openCalendarModal(id); break;
+        case 'export-calendar': this.exportCalendar(); break;
+        case 'toggle-notifications': this.toggleNotifications(); break;
+        case 'toggle-calendar': this.toggleCalendarAutoAdd(); break;
+        case 'copy-sync-id': this.copySyncId(); break;
       }
     });
 
@@ -1034,15 +1141,26 @@ const App = {
 
     if (!date || !time) return this.showToast('Date and time are required.', 'error');
 
-    this.state.routine.push({
-      id: generateId(), date, time, platform, assetId, source, isPosted: false,
-    });
+    const slot = { id: generateId(), date, time, platform, assetId, source, isPosted: false };
+    this.state.routine.push(slot);
 
     this.state.filterDate = date;
     saveState(this.state);
     this.closeModal();
     this.changeView('pipeline');
     this.showToast('Content scheduled!', 'success');
+
+    // Schedule local notification if enabled
+    if (this.state.config.notificationsEnabled && assetId) {
+      const asset = this.findAsset(assetId, source);
+      if (asset) NotificationManager.scheduleForSlot(slot, asset.title);
+    }
+
+    // Auto-add to calendar if enabled
+    if (this.state.config.calendarAutoAdd && assetId) {
+      const asset = this.findAsset(assetId, source);
+      if (asset) CalendarManager.addEvent(slot, asset.title);
+    }
   },
 
   addEmptySlot(date) {
@@ -1054,6 +1172,7 @@ const App = {
   },
 
   deleteSlot(id) {
+    NotificationManager.cancelForSlot(id);
     this.state.routine = this.state.routine.filter(r => r.id !== id);
     saveState(this.state);
     this.render();
@@ -1062,6 +1181,7 @@ const App = {
   unscheduleAsset(slotId) {
     const slot = this.state.routine.find(r => r.id === slotId);
     if (slot) {
+      NotificationManager.cancelForSlot(slotId);
       slot.assetId = null;
       slot.source = null;
       saveState(this.state);
@@ -1089,6 +1209,7 @@ const App = {
     });
 
     slot.isPosted = true;
+    NotificationManager.cancelForSlot(slotId);
     saveState(this.state);
     this.render();
     this.showToast('Marked as published! Logged in History.', 'success');
@@ -1118,6 +1239,98 @@ const App = {
 
     saveState(this.state);
     this.showToast('Content copied to Library for reuse.', 'success');
+  },
+
+  // ─── Calendar / Notification Actions ────────────────
+  openCalendarModal(slotId) {
+    const slot = this.state.routine.find(r => r.id === slotId);
+    if (!slot) return;
+    const asset = this.findAsset(slot.assetId, slot.source);
+    const title = asset ? asset.title : 'Scheduled Post';
+
+    const body = `
+      <div class="space-y-3 py-2">
+        <p class="text-sm text-slate-600">Add <strong>${escapeHtml(title)}</strong> on <strong>${escapeHtml(slot.date)}</strong> at <strong>${escapeHtml(slot.time)}</strong> to your calendar.</p>
+        <button data-action="cal-native" data-id="${slotId}" class="w-full flex items-center gap-3 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-xl px-4 py-3 text-sm font-bold text-slate-700 transition-colors">
+          <i class="fa-solid fa-mobile-screen text-blue-500 text-base w-5 text-center"></i> Add to Device Calendar
+        </button>
+        <button data-action="cal-google" data-id="${slotId}" class="w-full flex items-center gap-3 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-xl px-4 py-3 text-sm font-bold text-slate-700 transition-colors">
+          <i class="fa-brands fa-google text-red-500 text-base w-5 text-center"></i> Add to Google Calendar
+        </button>
+        <button data-action="cal-ics" data-id="${slotId}" class="w-full flex items-center gap-3 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-xl px-4 py-3 text-sm font-bold text-slate-700 transition-colors">
+          <i class="fa-solid fa-file-arrow-down text-green-500 text-base w-5 text-center"></i> Download .ics file
+        </button>
+      </div>`;
+
+    this.openModal('Add to Calendar', body, '');
+
+    // Bind calendar modal buttons
+    const modalBody = document.getElementById('modal-body');
+    if (!modalBody) return;
+    modalBody.addEventListener('click', (e) => {
+      const btn = e.target.closest('[data-action]');
+      if (!btn) return;
+      const action = btn.dataset.action;
+      if (action === 'cal-native') {
+        CalendarManager.addEvent(slot, title).then(r => {
+          this.closeModal();
+          this.showToast(r.method === 'native' ? 'Added to device calendar!' : 'Opened Google Calendar', 'success');
+        });
+      } else if (action === 'cal-google') {
+        CalendarManager.openGoogleCalendar(slot, title);
+        this.closeModal();
+      } else if (action === 'cal-ics') {
+        CalendarManager.downloadICS([slot], [...this.state.library, ...this.state.clips]);
+        this.closeModal();
+        this.showToast('Calendar file downloaded!', 'success');
+      }
+    }, { once: true });
+  },
+
+  exportCalendar() {
+    const allAssets = [...this.state.library, ...this.state.clips];
+    const upcomingSlots = this.state.routine.filter(r => !r.isPosted && r.assetId);
+    if (upcomingSlots.length === 0) {
+      this.showToast('No scheduled posts to export.', 'warning');
+      return;
+    }
+    CalendarManager.downloadICS(upcomingSlots, allAssets);
+    this.showToast('Calendar exported!', 'success');
+  },
+
+  async toggleNotifications() {
+    if (!this.state.config.notificationsEnabled) {
+      const granted = await NotificationManager.requestPermission();
+      this.state.config.notificationsEnabled = granted;
+      if (!granted) {
+        this.showToast('Notification permission denied.', 'warning');
+      } else {
+        this.showToast('Reminders enabled!', 'success');
+      }
+    } else {
+      this.state.config.notificationsEnabled = false;
+      await NotificationManager.cancelAll();
+      this.showToast('Reminders disabled.', 'info');
+    }
+    saveState(this.state);
+    this.render();
+  },
+
+  toggleCalendarAutoAdd() {
+    this.state.config.calendarAutoAdd = !this.state.config.calendarAutoAdd;
+    saveState(this.state);
+    this.showToast(this.state.config.calendarAutoAdd ? 'Auto calendar enabled!' : 'Auto calendar disabled.', 'info');
+    this.render();
+  },
+
+  copySyncId() {
+    const id = SyncManager.userId || '';
+    if (!id) return;
+    navigator.clipboard.writeText(id).then(() => {
+      this.showToast('Sync ID copied to clipboard!', 'success');
+    }).catch(() => {
+      this.showToast('Could not copy ID.', 'error');
+    });
   },
 
   // ─── Gemini / AI ────────────────────────────────────
