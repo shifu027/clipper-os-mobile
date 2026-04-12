@@ -1,0 +1,17 @@
+import { defineConfig } from 'vite';
+
+export default defineConfig({
+  root: '.',
+  build: {
+    outDir: 'dist',
+    emptyOutDir: true,
+  },
+  server: {
+    port: 3000,
+    open: true,
+  },
+  define: {
+    __GEMINI_ENABLED__: JSON.stringify(process.env.VITE_GEMINI_ENABLED === 'true'),
+    __GEMINI_API_KEY__: JSON.stringify(process.env.VITE_GEMINI_API_KEY || ''),
+  },
+});

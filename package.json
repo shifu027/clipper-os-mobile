@@ -1,0 +1,36 @@
+{
+  "name": "clipper-os-mobile",
+  "version": "1.0.0",
+  "description": "Clipper OS - Content management app for social media workflow. Mobile app built with Vite and Capacitor.",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "build:mobile": "vite build && npx cap sync",
+    "cap:sync": "npx cap sync",
+    "cap:open:android": "npx cap open android",
+    "cap:open:ios": "npx cap open ios"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/shifu027/clipper-os-mobile.git"
+  },
+  "keywords": ["clipper", "social-media", "mobile", "capacitor", "vite"],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/shifu027/clipper-os-mobile/issues"
+  },
+  "homepage": "https://github.com/shifu027/clipper-os-mobile#readme",
+  "dependencies": {
+    "@fortawesome/fontawesome-free": "^7.2.0"
+  },
+  "devDependencies": {
+    "autoprefixer": "^10.4.27",
+    "postcss": "^8.5.9",
+    "tailwindcss": "^3.4.19",
+    "vite": "^8.0.8"
+  }
+}
