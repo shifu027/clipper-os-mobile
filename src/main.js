@@ -193,9 +193,9 @@ const App = {
 
     if (syncEnabled) {
       // Load from cloud and override localStorage state
-      const cloudState = await loadState();
+      const cloudState = await SyncManager.load();
       if (cloudState) {
-        this.state = cloudState;
+        this.state = migrateState({ ...DEFAULT_STATE, ...cloudState });
         saveState(this.state);
       }
       this.syncStatus = 'synced';
@@ -557,7 +557,7 @@ const App = {
                 ? `<div class="flex justify-between items-start">
                      <div class="flex-1 min-w-0">
                        <span class="text-[9px] font-bold text-slate-500 uppercase tracking-wider bg-slate-100 px-2 py-0.5 rounded mb-1 inline-block">${escapeHtml(slot.platform)}</span>
-                       <h4 class="text-sm font-bold text-slate-800 truncate">${escapeHtml(asset.title)}</h4>
+                       <h4 class="text-sm font-bold text-slate-800 truncate" title="${escapeHtml(asset.title)}">${escapeHtml(asset.title)}</h4>
                      </div>
                      <div class="flex items-center gap-1 ml-2 shrink-0">
                        <button data-action="add-to-calendar" data-id="${slot.id}" class="text-slate-300 hover:text-blue-500 w-7 h-7 flex items-center justify-center rounded-lg hover:bg-blue-50 transition-colors" title="Add to Calendar"><i class="fa-solid fa-calendar-plus text-xs"></i></button>

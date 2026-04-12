@@ -45,9 +45,10 @@ export const NotificationManager = {
       await this.cancelForSlot(slot.id);
 
       // Build the notification timestamp: slot date+time minus 15 minutes
+      // Use local timezone by parsing date and time components explicitly
+      const [year, month, day] = slot.date.split('-').map(Number);
       const [hours, minutes] = slot.time.split(':').map(Number);
-      const dt = new Date(`${slot.date}T${slot.time}:00`);
-      dt.setMinutes(dt.getMinutes() - 15);
+      const dt = new Date(year, month - 1, day, hours, minutes - 15, 0);
 
       // Don't schedule if the trigger time is in the past
       if (dt <= new Date()) return;

@@ -26,7 +26,9 @@ export const CalendarManager = {
   },
 
   async addEvent(slot, assetTitle) {
-    const startDate = new Date(`${slot.date}T${slot.time}:00`);
+    const [year, month, day] = slot.date.split('-').map(Number);
+    const [hours, minutes] = slot.time.split(':').map(Number);
+    const startDate = new Date(year, month - 1, day, hours, minutes, 0);
     const endDate = new Date(startDate.getTime() + 30 * 60 * 1000); // +30 min
 
     // Try native Capacitor calendar first
@@ -48,7 +50,9 @@ export const CalendarManager = {
   },
 
   openGoogleCalendar(slot, assetTitle) {
-    const startDate = new Date(`${slot.date}T${slot.time}:00`);
+    const [year, month, day] = slot.date.split('-').map(Number);
+    const [hours, minutes] = slot.time.split(':').map(Number);
+    const startDate = new Date(year, month - 1, day, hours, minutes, 0);
     const endDate = new Date(startDate.getTime() + 30 * 60 * 1000);
 
     const params = new URLSearchParams({
@@ -76,7 +80,9 @@ export const CalendarManager = {
       const title = asset ? asset.title : 'Scheduled Post';
       const platform = slot.platform || '';
 
-      const startDate = new Date(`${slot.date}T${slot.time}:00`);
+      const [year, month, day] = slot.date.split('-').map(Number);
+      const [slotHours, slotMinutes] = slot.time.split(':').map(Number);
+      const startDate = new Date(year, month - 1, day, slotHours, slotMinutes, 0);
       const endDate = new Date(startDate.getTime() + 30 * 60 * 1000);
       const now = new Date();
 

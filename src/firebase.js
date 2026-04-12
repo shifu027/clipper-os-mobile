@@ -76,9 +76,7 @@ export const SyncManager = {
     try {
       const { doc, setDoc } = await import('firebase/firestore');
       const ref = doc(this.db, 'users', this.userId, 'data', 'appState');
-      // Exclude non-serialisable / transient fields
-      const { ...serializable } = state;
-      await setDoc(ref, { ...serializable, _updatedAt: Date.now() });
+      await setDoc(ref, { ...state, _updatedAt: Date.now() });
     } catch (e) {
       console.warn('[SyncManager] save error:', e);
     }
