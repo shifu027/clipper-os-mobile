@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="2732" height="2732" viewBox="0 0 2732 2732">
+  <rect width="2732" height="2732" fill="#4f46e5"/>
+  <g transform="translate(1366, 1200)">
+    <!-- Scissors icon -->
+    <circle cx="-120" cy="-80" r="80" fill="none" stroke="white" stroke-width="40"/>
+    <circle cx="120" cy="-80" r="80" fill="none" stroke="white" stroke-width="40"/>
+    <line x1="-60" y1="-20" x2="120" y2="200" stroke="white" stroke-width="40" stroke-linecap="round"/>
+    <line x1="60" y1="-20" x2="-120" y2="200" stroke="white" stroke-width="40" stroke-linecap="round"/>
+  </g>
+  <text x="1366" y="1600" font-family="system-ui, sans-serif" font-size="120" font-weight="bold" fill="white" text-anchor="middle">Clipper OS</text>
+</svg>

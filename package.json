@@ -17,7 +17,13 @@
     "type": "git",
     "url": "git+https://github.com/shifu027/clipper-os-mobile.git"
   },
-  "keywords": ["clipper", "social-media", "mobile", "capacitor", "vite"],
+  "keywords": [
+    "clipper",
+    "social-media",
+    "mobile",
+    "capacitor",
+    "vite"
+  ],
   "author": "",
   "license": "ISC",
   "bugs": {
@@ -25,6 +31,10 @@
   },
   "homepage": "https://github.com/shifu027/clipper-os-mobile#readme",
   "dependencies": {
+    "@capacitor/android": "^8.3.0",
+    "@capacitor/cli": "^8.3.0",
+    "@capacitor/core": "^8.3.0",
+    "@capacitor/ios": "^8.3.0",
     "@fortawesome/fontawesome-free": "^7.2.0"
   },
   "devDependencies": {
