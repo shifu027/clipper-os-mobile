@@ -1,4 +1,5 @@
 import './styles.css';
+import * as THREE from 'three';
 import { NotificationManager } from './notifications.js';
 import { AuthManager } from './auth.js';
 import { SyncManager } from './supabase.js';
@@ -8,6 +9,145 @@ import { CalendarManager } from './calendar.js';
  * Clipper OS — Content Management Studio
  * Mobile-first content operations app for creators, social media managers, and clipper workflows.
  */
+
+// ─── Three.js Background Logic ──────────────────────────
+function initBackground() {
+  const canvas = document.getElementById('three-bg');
+  if (!canvas) return;
+
+  const isMobile = /Android|iPhone/i.test(navigator.userAgent);
+  const MAX_PARTICLES = isMobile ? 40 : 100;
+  const MAX_DISTANCE = 150;
+
+  let scene, camera, renderer, particles, lines;
+  let positions, velocities, particleData = [];
+  let mouse = new THREE.Vector2(-1000, -1000);
+
+  scene = new THREE.Scene();
+  camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 1, 4000);
+  camera.position.z = 1000;
+
+  renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  renderer.setSize(window.innerWidth, window.innerHeight);
+
+  const group = new THREE.Group();
+  scene.add(group);
+
+  const segments = MAX_PARTICLES * MAX_PARTICLES;
+  positions = new Float32Array(MAX_PARTICLES * 3);
+  const linePositions = new Float32Array(segments * 3);
+  const lineColors = new Float32Array(segments * 3);
+
+  const pMaterial = new THREE.PointsMaterial({
+    color: 0x4cc9f0,
+    size: 3,
+    blending: THREE.AdditiveBlending,
+    transparent: true,
+    sizeAttenuation: true
+  });
+
+  const particlesGeom = new THREE.BufferGeometry();
+  particlesGeom.setAttribute('position', new THREE.BufferAttribute(positions, 3).setUsage(THREE.DynamicDrawUsage));
+  particles = new THREE.Points(particlesGeom, pMaterial);
+  group.add(particles);
+
+  const linesGeom = new THREE.BufferGeometry();
+  linesGeom.setAttribute('position', new THREE.BufferAttribute(linePositions, 3).setUsage(THREE.DynamicDrawUsage));
+  linesGeom.setAttribute('color', new THREE.BufferAttribute(lineColors, 3).setUsage(THREE.DynamicDrawUsage));
+
+  const lMaterial = new THREE.LineBasicMaterial({
+    vertexColors: true,
+    blending: THREE.AdditiveBlending,
+    transparent: true,
+    opacity: 0.3
+  });
+
+  lines = new THREE.LineSegments(linesGeom, lMaterial);
+  group.add(lines);
+
+  for (let i = 0; i < MAX_PARTICLES; i++) {
+    const x = Math.random() * 800 - 400;
+    const y = Math.random() * 800 - 400;
+    const z = Math.random() * 800 - 400;
+    positions[i * 3] = x;
+    positions[i * 3 + 1] = y;
+    positions[i * 3 + 2] = z;
+    particleData.push({
+      velocity: new THREE.Vector3(-0.5 + Math.random(), -0.5 + Math.random(), -0.5 + Math.random()),
+      numConnections: 0
+    });
+  }
+
+  function onWindowResize() {
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+  }
+
+  window.addEventListener('resize', onWindowResize);
+  window.addEventListener('mousemove', (e) => {
+    mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
+    mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
+  });
+
+  function render() {
+    let vertexIndex = 0;
+    let colorIndex = 0;
+    let lineCount = 0;
+
+    const lp = lines.geometry.attributes.position.array;
+    const lc = lines.geometry.attributes.color.array;
+
+    for (let i = 0; i < MAX_PARTICLES; i++) {
+      const i3 = i * 3;
+      positions[i3] += particleData[i].velocity.x;
+      positions[i3 + 1] += particleData[i].velocity.y;
+      positions[i3 + 2] += particleData[i].velocity.z;
+
+      if (positions[i3] < -400 || positions[i3] > 400) particleData[i].velocity.x *= -1;
+      if (positions[i3+1] < -400 || positions[i3+1] > 400) particleData[i].velocity.y *= -1;
+      if (positions[i3+2] < -400 || positions[i3+2] > 400) particleData[i].velocity.z *= -1;
+
+      for (let j = i + 1; j < MAX_PARTICLES; j++) {
+        const j3 = j * 3;
+        const dx = positions[i3] - positions[j3];
+        const dy = positions[i3 + 1] - positions[j3 + 1];
+        const dz = positions[i3 + 2] - positions[j3 + 2];
+        const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
+
+        if (dist < MAX_DISTANCE) {
+          const alpha = 1.0 - dist / MAX_DISTANCE;
+          lp[vertexIndex++] = positions[i3];
+          lp[vertexIndex++] = positions[i3 + 1];
+          lp[vertexIndex++] = positions[i3 + 2];
+          lp[vertexIndex++] = positions[j3];
+          lp[vertexIndex++] = positions[j3 + 1];
+          lp[vertexIndex++] = positions[j3 + 2];
+          lc[colorIndex++] = alpha * 0.2;
+          lc[colorIndex++] = alpha * 0.5;
+          lc[colorIndex++] = alpha * 0.8;
+          lc[colorIndex++] = alpha * 0.2;
+          lc[colorIndex++] = alpha * 0.5;
+          lc[colorIndex++] = alpha * 0.8;
+          lineCount++;
+        }
+      }
+    }
+
+    camera.position.x += (mouse.x * 50 - camera.position.x) * 0.02;
+    camera.position.y += (mouse.y * 50 - camera.position.y) * 0.02;
+    camera.lookAt(scene.position);
+
+    lines.geometry.setDrawRange(0, lineCount * 2);
+    lines.geometry.attributes.position.needsUpdate = true;
+    lines.geometry.attributes.color.needsUpdate = true;
+    particles.geometry.attributes.position.needsUpdate = true;
+    renderer.render(scene, camera);
+    requestAnimationFrame(render);
+  }
+  render();
+}
 
 // ─── Helpers ────────────────────────────────────────────
 function generateId() {
@@ -1701,4 +1841,7 @@ function setupAuthForms() {
 
 // ─── Initialize ───────────────────────────────────────
 window.ClipperApp = App;
-document.addEventListener('DOMContentLoaded', () => App.init());
+document.addEventListener('DOMContentLoaded', () => {
+  App.init();
+  initBackground();
+});
