@@ -1480,6 +1480,12 @@ const App = {
 };
 
 // ─── Auth Helpers ─────────────────────────────────────
+const AUTH_REDIRECT_DELAY_MS = 3000;
+
+function isValidEmail(email) {
+  return !!email && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+}
+
 function showAuthScreen() {
   const authScreen = document.getElementById('auth-screen');
   if (authScreen) authScreen.classList.remove('hidden');
@@ -1551,7 +1557,7 @@ function setupAuthForms() {
     const btn = document.getElementById('login-btn');
     const spinner = document.getElementById('login-spinner');
 
-    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    if (!email || !isValidEmail(email)) {
       setAuthError('Por favor, insira um e-mail válido.');
       return;
     }
@@ -1598,7 +1604,7 @@ function setupAuthForms() {
       setAuthError('Por favor, insira seu nome.');
       return;
     }
-    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    if (!email || !isValidEmail(email)) {
       setAuthError('Por favor, insira um e-mail válido.');
       return;
     }
@@ -1621,7 +1627,7 @@ function setupAuthForms() {
       if (data.user && data.user.email_confirmed_at == null && data.session === null) {
         setAuthSuccess('Conta criada! Verifique seu e-mail para confirmar o cadastro.');
         document.getElementById('signup-form')?.reset();
-        setTimeout(() => switchAuthTab('login'), 3000);
+        setTimeout(() => switchAuthTab('login'), AUTH_REDIRECT_DELAY_MS);
       } else {
         hideAuthScreen();
         await App.initApp();
@@ -1651,7 +1657,7 @@ function setupAuthForms() {
     const btn = document.getElementById('forgot-btn');
     const spinner = document.getElementById('forgot-spinner');
 
-    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    if (!email || !isValidEmail(email)) {
       setAuthError('Por favor, insira um e-mail válido.');
       return;
     }
