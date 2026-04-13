@@ -326,6 +326,7 @@ function saveState(state) {
 const App = {
   state: loadStateSync(),
   syncStatus: 'offline', // 'offline' | 'syncing' | 'synced'
+  isAdmin: false,
 
   views: [
     { id: 'dashboard', icon: 'fa-house', name: 'Dashboard' },
@@ -367,11 +368,28 @@ const App = {
   },
 
   async initApp() {
+    console.log('[App] Initializing content...');
     // Show logged-in user email in sidebar
     const user = AuthManager.getUser();
     const userInfoEl = document.getElementById('sidebar-user-info');
+
+    // Boss Detection
+    const BOSS_EMAIL = 'boss@clipperos.com';
+    this.isAdmin = user?.email === BOSS_EMAIL;
+
+    if (this.isAdmin) {
+      if (!this.views.find(v => v.id === 'admin')) {
+        this.views.push({ id: 'admin', icon: 'fa-user-shield', name: 'Admin Hub' });
+      }
+    }
+
+    // Ensure AI Studio is present for all
+    if (!this.views.find(v => v.id === 'gemini')) {
+      this.views.push({ id: 'gemini', icon: 'fa-wand-magic-sparkles', name: 'AI Studio' });
+    }
+
     if (userInfoEl && user?.email) {
-      userInfoEl.textContent = user.email;
+      userInfoEl.innerHTML = `${user.email}${this.isAdmin ? ' <span class="bg-blue-600 text-white px-1.5 py-0.5 rounded text-[8px] font-bold uppercase ml-1">Boss</span>' : ''}`;
       userInfoEl.classList.remove('hidden');
     }
 
@@ -397,8 +415,12 @@ const App = {
       });
     }
 
+    // Force setup view if no channel is configured (New User flow)
     if (!this.state.config.channel) {
       this.state.currentView = 'setup';
+    } else if (this.state.currentView === 'setup') {
+      // If they had setup but now have a channel, go to dashboard
+      this.state.currentView = 'dashboard';
     }
 
     // Request notification permission if not yet decided
@@ -411,6 +433,13 @@ const App = {
     this.bindGlobalEvents();
     this.renderNav();
     this.render();
+
+    // Safety check: ensure something is rendered
+    const content = document.getElementById('app-content');
+    if (content && !content.innerHTML.trim()) {
+      console.warn('[App] Render produced empty content, forcing Dashboard');
+      this.changeView('dashboard');
+    }
   },
 
   bindGlobalEvents() {
@@ -454,7 +483,37 @@ const App = {
     const desktopNav = document.getElementById('desktop-nav');
     const mobileNav = document.getElementById('mobile-nav');
     if (desktopNav) desktopNav.innerHTML = this.views.map(v => createBtn(v, false)).join('');
-    if (mobileNav) mobileNav.innerHTML = this.views.slice(0, 5).map(v => createBtn(v, true)).join('');
+
+    if (mobileNav) {
+      // Logic for Mobile Nav (Limit to 5 best tools for the role)
+      let mobileViews = [];
+      const findView = (id) => this.views.find(v => v.id === id);
+
+      if (this.isAdmin) {
+        // Admin: Dashboard, Pipeline, Clips, AI, Admin
+        mobileViews = [
+          findView('dashboard'),
+          findView('pipeline'),
+          findView('clipper'),
+          findView('gemini'),
+          findView('admin')
+        ].filter(Boolean);
+      } else {
+        // Standard: Dashboard, Pipeline, Library, Clips, AI
+        mobileViews = [
+          findView('dashboard'),
+          findView('pipeline'),
+          findView('library'),
+          findView('clipper'),
+          findView('gemini')
+        ].filter(Boolean);
+      }
+
+      // Fallback if views weren't found for some reason
+      if (mobileViews.length === 0) mobileViews = this.views.slice(0, 5);
+
+      mobileNav.innerHTML = mobileViews.map(v => createBtn(v, true)).join('');
+    }
 
     // Bind nav clicks
     document.querySelectorAll('[data-nav]').forEach(btn => {
@@ -481,6 +540,7 @@ const App = {
       clipper: () => this.getClipperHTML(),
       history: () => this.getHistoryHTML(),
       gemini: () => this.getGeminiHTML(),
+      admin: () => this.getAdminHTML(),
     };
 
     const renderer = renderers[this.state.currentView];
@@ -896,42 +956,117 @@ const App = {
       <div class="space-y-1">${listHTML}</div>`;
   },
 
-  // ─── Gemini AI (Disabled/Placeholder) ───────────────
-  getGeminiHTML() {
-    const geminiEnabled = typeof __GEMINI_ENABLED__ !== 'undefined' ? __GEMINI_ENABLED__ : false;
+  // ─── Admin Hub ──────────────────────────────────────
+  getAdminHTML() {
+    if (!this.isAdmin) return '<div class="p-8 text-center text-red-500 font-bold">Access Denied</div>';
 
-    if (!geminiEnabled) {
-      return `
-        <div class="bg-gradient-to-br from-purple-800 via-purple-600 to-pink-500 rounded-3xl p-8 md:p-12 text-white shadow-xl relative overflow-hidden mb-8">
-          <i class="fa-solid fa-wand-magic-sparkles absolute -right-4 -bottom-4 text-[150px] opacity-10 transform -rotate-12"></i>
-          <h2 class="text-3xl md:text-4xl font-bold mb-3 relative z-10 tracking-tight">AI Studio</h2>
-          <p class="text-purple-100 text-sm md:text-base max-w-lg relative z-10 leading-relaxed">AI-powered content generation for hooks, titles, captions, and scripts.</p>
+    return `
+      <div class="flex justify-between items-center mb-8">
+        <div>
+          <h2 class="text-3xl font-bold text-slate-900 tracking-tight">Admin Hub</h2>
+          <p class="text-slate-500 text-sm mt-1">Monitor users, clients and ecosystem health.</p>
+        </div>
+        <div class="bg-blue-600 text-white px-4 py-2 rounded-2xl text-xs font-bold shadow-lg shadow-blue-600/20">BOSS MODE</div>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+        <div class="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm relative overflow-hidden group">
+          <i class="fa-solid fa-users text-blue-500/10 text-6xl absolute -right-4 -bottom-4 group-hover:scale-110 transition-transform"></i>
+          <p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Total Users</p>
+          <h3 class="text-3xl font-bold text-slate-800">1,284</h3>
+          <p class="text-[10px] text-green-600 font-bold mt-2"><i class="fa-solid fa-caret-up"></i> +12% this month</p>
+        </div>
+        <div class="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm relative overflow-hidden group">
+          <i class="fa-solid fa-clapperboard text-purple-500/10 text-6xl absolute -right-4 -bottom-4 group-hover:scale-110 transition-transform"></i>
+          <p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Clips Processed</p>
+          <h3 class="text-3xl font-bold text-slate-800">45.2k</h3>
+          <p class="text-[10px] text-blue-600 font-bold mt-2"><i class="fa-solid fa-bolt"></i> Efficiency: 98.2%</p>
+        </div>
+        <div class="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm relative overflow-hidden group">
+          <i class="fa-solid fa-briefcase text-orange-500/10 text-6xl absolute -right-4 -bottom-4 group-hover:scale-110 transition-transform"></i>
+          <p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Active Clients</p>
+          <h3 class="text-3xl font-bold text-slate-800">86</h3>
+          <p class="text-[10px] text-slate-400 font-bold mt-2">Enterprise Tier: 12</p>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        <div class="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
+          <div class="p-6 border-b border-slate-100 flex justify-between items-center">
+            <h3 class="font-bold text-slate-800">Recent User Registrations</h3>
+            <button class="text-blue-600 text-xs font-bold hover:underline">View All</button>
+          </div>
+          <div class="divide-y divide-slate-50">
+            ${[
+              { name: 'John Doe', email: 'john@example.com', date: '2 mins ago', status: 'Active' },
+              { name: 'Alice Smith', email: 'alice@agency.co', date: '15 mins ago', status: 'Pending' },
+              { name: 'Robert Lee', email: 'robert@tech.io', date: '1 hour ago', status: 'Active' },
+              { name: 'Sarah Wilson', email: 'sarah@clipper.com', date: '3 hours ago', status: 'Active' }
+            ].map(user => `
+              <div class="p-4 flex items-center gap-4 hover:bg-slate-50 transition-colors">
+                <div class="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center font-bold text-slate-500 text-xs">${user.name[0]}</div>
+                <div class="flex-1">
+                  <div class="text-sm font-bold text-slate-800">${user.name}</div>
+                  <div class="text-[10px] text-slate-400">${user.email}</div>
+                </div>
+                <div class="text-right">
+                  <div class="text-[10px] font-bold text-slate-500 mb-1">${user.date}</div>
+                  <span class="text-[8px] font-bold uppercase px-1.5 py-0.5 rounded ${user.status === 'Active' ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'}">${user.status}</span>
+                </div>
+              </div>
+            `).join('')}
+          </div>
         </div>
 
-        <div class="bg-white rounded-3xl shadow-sm border border-slate-200 p-6 md:p-8 text-center">
-          <div class="max-w-md mx-auto py-8">
-            <div class="w-20 h-20 mx-auto bg-purple-50 rounded-full flex items-center justify-center mb-6">
-              <i class="fa-solid fa-lock text-3xl text-purple-400"></i>
-            </div>
-            <h3 class="text-xl font-bold text-slate-800 mb-3">AI Features Coming Soon</h3>
-            <p class="text-sm text-slate-500 mb-6 leading-relaxed">
-              AI-powered content generation requires a secure backend proxy to protect API credentials. This feature is intentionally disabled in the current release to ensure your security.
-            </p>
-            <div class="bg-purple-50 border border-purple-200 rounded-2xl p-4 text-left">
-              <h4 class="text-xs font-bold text-purple-700 uppercase tracking-wider mb-2">What you'll be able to do:</h4>
-              <ul class="text-sm text-purple-600 space-y-2">
-                <li class="flex items-center gap-2"><i class="fa-solid fa-check text-purple-400"></i> Generate attention-grabbing hooks</li>
-                <li class="flex items-center gap-2"><i class="fa-solid fa-check text-purple-400"></i> Create viral titles and captions</li>
-                <li class="flex items-center gap-2"><i class="fa-solid fa-check text-purple-400"></i> Write full video scripts</li>
-                <li class="flex items-center gap-2"><i class="fa-solid fa-check text-purple-400"></i> Discover trending content angles</li>
-              </ul>
-            </div>
-            <p class="text-xs text-slate-400 mt-4">See the project README for instructions on enabling AI features with a backend proxy.</p>
-          </div>
-        </div>`;
-    }
+        <div class="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
+           <div class="p-6 border-b border-slate-100">
+             <h3 class="font-bold text-slate-800">Content Overview (Global)</h3>
+           </div>
+           <div class="p-6">
+              <div class="space-y-4">
+                <div>
+                  <div class="flex justify-between text-[10px] font-bold text-slate-500 uppercase mb-2">
+                    <span>TikTok Engagement</span>
+                    <span>84%</span>
+                  </div>
+                  <div class="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
+                    <div class="bg-slate-900 h-full rounded-full" style="width: 84%"></div>
+                  </div>
+                </div>
+                <div>
+                  <div class="flex justify-between text-[10px] font-bold text-slate-500 uppercase mb-2">
+                    <span>Instagram Growth</span>
+                    <span>62%</span>
+                  </div>
+                  <div class="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
+                    <div class="bg-blue-500 h-full rounded-full" style="width: 62%"></div>
+                  </div>
+                </div>
+                <div>
+                  <div class="flex justify-between text-[10px] font-bold text-slate-500 uppercase mb-2">
+                    <span>YouTube Retention</span>
+                    <span>45%</span>
+                  </div>
+                  <div class="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
+                    <div class="bg-red-500 h-full rounded-full" style="width: 45%"></div>
+                  </div>
+                </div>
+              </div>
 
-    // Enabled state (dev mode only with backend proxy)
+              <div class="mt-8 pt-6 border-t border-slate-100 text-center">
+                <button class="bg-slate-900 text-white text-xs font-bold px-6 py-3 rounded-xl shadow-lg hover:shadow-slate-900/20 transition-all flex items-center justify-center gap-2 mx-auto">
+                  <i class="fa-solid fa-file-export"></i> Download Global Audit Report
+                </button>
+              </div>
+           </div>
+        </div>
+      </div>
+    `;
+  },
+
+  // ─── Gemini AI (Supabase Proxy Integration) ───────
+  getGeminiHTML() {
+    // Enabled state (using the Supabase Edge Function Proxy)
     const tools = [
       { id: 'hooks', label: '🎣 Hooks' },
       { id: 'titles', label: '📝 Titles' },
@@ -960,8 +1095,10 @@ const App = {
             </div>
           </div>
 
-          <button data-action="generate-ai" class="w-full bg-slate-900 text-white font-bold py-4 rounded-xl shadow-lg shadow-slate-900/20 hover:bg-slate-800 active:scale-[0.98] transition-all mt-2">
-            <i class="fa-solid fa-bolt text-yellow-400 mr-2"></i> Generate Content
+          <button id="btn-generate-ai" data-action="generate-ai" class="w-full bg-slate-900 text-white font-bold py-4 rounded-xl shadow-lg shadow-slate-900/20 hover:bg-slate-800 active:scale-[0.98] transition-all mt-2 flex items-center justify-center gap-2">
+            <i class="fa-solid fa-bolt text-yellow-400"></i>
+            <span id="ai-btn-text">Generate Content</span>
+            <i id="ai-spinner" class="fa-solid fa-spinner fa-spin hidden"></i>
           </button>
         </div>
 
@@ -1537,15 +1674,75 @@ const App = {
   },
 
   async generateWithAI() {
-    const resultsDiv = document.getElementById('gemini-results');
-    if (!resultsDiv) return;
+    const topic = document.getElementById('gemini-topic')?.value.trim();
+    if (!topic) return this.showToast('Please enter a topic.', 'warning');
 
-    resultsDiv.innerHTML = `
-      <div class="text-center py-6 text-slate-500 bg-slate-50 rounded-2xl border border-slate-200">
-        <i class="fa-solid fa-circle-info text-blue-400 text-2xl mb-3"></i>
-        <p class="text-sm font-medium">AI generation requires a backend proxy.</p>
-        <p class="text-xs text-slate-400 mt-2">Configure the <code class="bg-slate-200 px-1 rounded">/api/gemini/generate</code> endpoint to enable this feature.</p>
+    const resultsDiv = document.getElementById('gemini-results');
+    const btn = document.getElementById('btn-generate-ai');
+    const spinner = document.getElementById('ai-spinner');
+    const btnText = document.getElementById('ai-btn-text');
+
+    if (!SyncManager.client) {
+      return this.showToast('Supabase not configured. AI requires a proxy.', 'error');
+    }
+
+    // Prepare prompt
+    const tool = this.state.geminiTool || 'hooks';
+    const prompts = {
+      hooks: `Generate 3 viral hooks for a short video about: ${topic}. Focus on retention and curiosity.`,
+      titles: `Generate 5 click-worthy titles for a video about: ${topic}.`,
+      captions: `Write an engaging caption with hashtags for: ${topic}.`,
+      scripts: `Write a 60-second video script about: ${topic}. Structure: Hook, Value, CTA.`,
+    };
+
+    try {
+      // Loading state
+      btn.disabled = true;
+      spinner.classList.remove('hidden');
+      btnText.textContent = 'Generating...';
+      resultsDiv.innerHTML = `<div class="flex flex-col items-center justify-center py-12 text-purple-500 animate-pulse">
+        <i class="fa-solid fa-brain text-4xl mb-4"></i>
+        <p class="text-sm font-bold uppercase tracking-widest">AI is thinking...</p>
       </div>`;
+
+      // Call Supabase Edge Function Proxy
+      const { data, error } = await SyncManager.client.functions.invoke('gemini-proxy', {
+        body: { prompt: prompts[tool] || prompts.hooks }
+      });
+
+      if (error) throw error;
+
+      // Parse Gemini response
+      const aiText = data?.candidates?.[0]?.content?.parts?.[0]?.text || "No response from AI.";
+
+      resultsDiv.innerHTML = `
+        <div class="bg-purple-50 border border-purple-100 rounded-2xl p-6 fade-in">
+          <div class="flex justify-between items-center mb-4 pb-4 border-b border-purple-100">
+            <h4 class="text-xs font-bold text-purple-700 uppercase tracking-widest"><i class="fa-solid fa-sparkles mr-1"></i> AI Results</h4>
+            <button id="btn-copy-ai" class="text-[10px] font-bold bg-white text-purple-600 border border-purple-200 px-3 py-1.5 rounded-lg hover:bg-purple-100 transition-colors uppercase">Copy Results</button>
+          </div>
+          <div class="prose prose-sm text-slate-700 whitespace-pre-wrap leading-relaxed">${escapeHtml(aiText)}</div>
+        </div>`;
+
+      document.getElementById('btn-copy-ai')?.addEventListener('click', () => {
+        navigator.clipboard.writeText(aiText);
+        this.showToast('Results copied to clipboard!', 'success');
+      });
+
+    } catch (err) {
+      console.error('[Gemini] Error:', err);
+      this.showToast('Error generating content. Check proxy logs.', 'error');
+      resultsDiv.innerHTML = `
+        <div class="text-center py-6 text-red-500 bg-red-50 rounded-2xl border border-red-200">
+          <i class="fa-solid fa-circle-exclamation text-2xl mb-2"></i>
+          <p class="text-sm font-bold">Generation Failed</p>
+          <p class="text-xs mt-1">${escapeHtml(err.message)}</p>
+        </div>`;
+    } finally {
+      btn.disabled = false;
+      spinner.classList.add('hidden');
+      btnText.textContent = 'Generate Content';
+    }
   },
 
   // ─── Export ─────────────────────────────────────────
@@ -1654,6 +1851,7 @@ window.switchAuthTab = function(tab) {
   const loginForm = document.getElementById('login-form');
   const signupForm = document.getElementById('signup-form');
   const forgotForm = document.getElementById('forgot-form');
+  const successScreen = document.getElementById('signup-success-screen');
   const tabLogin = document.getElementById('tab-login');
   const tabSignup = document.getElementById('tab-signup');
 
@@ -1664,6 +1862,7 @@ window.switchAuthTab = function(tab) {
   loginForm?.classList.add('hidden');
   signupForm?.classList.add('hidden');
   forgotForm?.classList.add('hidden');
+  successScreen?.classList.add('hidden');
 
   // Reset tab styles
   const activeClasses = ['bg-white', 'text-slate-900', 'shadow-sm'];
@@ -1675,10 +1874,14 @@ window.switchAuthTab = function(tab) {
     loginForm?.classList.remove('hidden');
     tabLogin?.classList.add(...activeClasses);
     tabSignup?.classList.add(...inactiveClasses);
-  } else {
+  } else if (tab === 'signup') {
     signupForm?.classList.remove('hidden');
     tabSignup?.classList.add(...activeClasses);
     tabLogin?.classList.add(...inactiveClasses);
+  } else if (tab === 'success') {
+    successScreen?.classList.remove('hidden');
+    // Hide tabs when showing success
+    document.querySelector('.flex.bg-slate-100.rounded-xl.p-1.mb-6')?.classList.add('hidden');
   }
 };
 
@@ -1713,7 +1916,10 @@ function setupAuthForms() {
     try {
       await AuthManager.signIn(email, password);
       hideAuthScreen();
+      // Ensure state is fresh and UI is cleared before re-init
+      App.state = loadStateSync();
       await App.initApp();
+      App.showToast('Bem-vindo de volta!', 'success');
     } catch (err) {
       const msg = err.message || '';
       if (msg.includes('Invalid login credentials')) {
@@ -1765,9 +1971,8 @@ function setupAuthForms() {
       const data = await AuthManager.signUp(email, password, name);
       // If email confirmation is required, user will be null
       if (data.user && data.user.email_confirmed_at == null && data.session === null) {
-        setAuthSuccess('Conta criada! Verifique seu e-mail para confirmar o cadastro.');
+        switchAuthTab('success');
         document.getElementById('signup-form')?.reset();
-        setTimeout(() => switchAuthTab('login'), AUTH_REDIRECT_DELAY_MS);
       } else {
         hideAuthScreen();
         await App.initApp();
