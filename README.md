@@ -173,6 +173,23 @@ To enable AI in production, set up a backend proxy:
 └── .env.example                # Environment variables template
 ```
 
+## GitHub Pages
+
+The app is automatically deployed to GitHub Pages on every push to `main`.
+
+**Live URL:** https://shifu027.github.io/clipper-os-mobile/
+
+### Required Secrets
+
+Configure these in **Settings → Secrets → Actions**:
+
+| Secret | Description |
+|--------|-------------|
+| `VITE_SUPABASE_URL` | Your Supabase project URL |
+| `VITE_SUPABASE_ANON_KEY` | Your Supabase anon/public key |
+
+> **Note:** After configuring secrets, enable GitHub Pages in **Settings → Pages → Source → GitHub Actions**.
+
 ## NPM Scripts
 
 | Script              | Description                                   |
