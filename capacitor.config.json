@@ -1,5 +1,17 @@
 {
   "appId": "io.clipper.os",
   "appName": "Clipper OS",
-  "webDir": "dist"
+  "webDir": "dist",
+  "server": {
+    "androidScheme": "https"
+  },
+  "plugins": {
+    "SplashScreen": {
+      "launchShowDuration": 0
+    },
+    "StatusBar": {
+      "style": "dark",
+      "backgroundColor": "#f8fafc"
+    }
+  }
 }
