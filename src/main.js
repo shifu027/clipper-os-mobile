@@ -1,5 +1,6 @@
 import './styles.css';
 import { NotificationManager } from './notifications.js';
+import { AuthManager } from './auth.js';
 import { SyncManager } from './supabase.js';
 import { CalendarManager } from './calendar.js';
 
@@ -188,6 +189,44 @@ const App = {
   ],
 
   async init() {
+    // ── Auth gate ───────────────────────────────────────
+    const authConfigured = AuthManager.init();
+
+    if (!authConfigured) {
+      // Show error on auth screen when Supabase is not configured
+      const authScreen = document.getElementById('auth-screen');
+      const errEl = document.getElementById('auth-error');
+      if (errEl) {
+        errEl.textContent = 'Configuração do servidor não encontrada. Contate o administrador.';
+        errEl.classList.remove('hidden');
+      }
+      // Keep auth screen visible — app cannot function without auth
+      return;
+    }
+
+    // Wire up auth forms before checking session
+    setupAuthForms();
+
+    const session = await AuthManager.getSession();
+    if (!session) {
+      // No active session — show auth screen, hide app
+      return;
+    }
+
+    // Active session — proceed to app
+    hideAuthScreen();
+    await this.initApp();
+  },
+
+  async initApp() {
+    // Show logged-in user email in sidebar
+    const user = AuthManager.getUser();
+    const userInfoEl = document.getElementById('sidebar-user-info');
+    if (userInfoEl && user?.email) {
+      userInfoEl.textContent = user.email;
+      userInfoEl.classList.remove('hidden');
+    }
+
     // Initialise Supabase sync (no-op when env vars are absent)
     const syncEnabled = await SyncManager.init();
 
@@ -232,6 +271,11 @@ const App = {
     document.getElementById('btn-settings-mobile')?.addEventListener('click', () => this.editConfig());
     document.getElementById('modal-backdrop')?.addEventListener('click', () => this.closeModal());
     document.getElementById('modal-close-btn')?.addEventListener('click', () => this.closeModal());
+    document.getElementById('btn-logout')?.addEventListener('click', async () => {
+      await AuthManager.signOut();
+      SyncManager.reset();
+      showAuthScreen();
+    });
   },
 
   // ─── Navigation ─────────────────────────────────────
@@ -1425,6 +1469,170 @@ const App = {
     }, 3000);
   },
 };
+
+// ─── Auth Helpers ─────────────────────────────────────
+function showAuthScreen() {
+  const authScreen = document.getElementById('auth-screen');
+  if (authScreen) authScreen.classList.remove('hidden');
+}
+
+function hideAuthScreen() {
+  const authScreen = document.getElementById('auth-screen');
+  if (authScreen) authScreen.classList.add('hidden');
+}
+
+function setAuthError(msg) {
+  const el = document.getElementById('auth-error');
+  if (!el) return;
+  el.textContent = msg;
+  el.classList.toggle('hidden', !msg);
+}
+
+function setAuthSuccess(msg) {
+  const el = document.getElementById('auth-success');
+  if (!el) return;
+  el.textContent = msg;
+  el.classList.toggle('hidden', !msg);
+}
+
+window.switchAuthTab = function(tab) {
+  const loginForm = document.getElementById('login-form');
+  const signupForm = document.getElementById('signup-form');
+  const forgotForm = document.getElementById('forgot-form');
+  const tabLogin = document.getElementById('tab-login');
+  const tabSignup = document.getElementById('tab-signup');
+
+  setAuthError('');
+  setAuthSuccess('');
+
+  // Hide all forms first
+  loginForm?.classList.add('hidden');
+  signupForm?.classList.add('hidden');
+  forgotForm?.classList.add('hidden');
+
+  // Reset tab styles
+  const activeTabClass = 'bg-white text-slate-900 shadow-sm';
+  const inactiveTabClass = 'text-slate-500';
+  tabLogin?.classList.remove(activeTabClass, inactiveTabClass);
+  tabSignup?.classList.remove(activeTabClass, inactiveTabClass);
+
+  if (tab === 'login') {
+    loginForm?.classList.remove('hidden');
+    tabLogin?.classList.add(activeTabClass);
+    tabSignup?.classList.add(inactiveTabClass);
+  } else {
+    signupForm?.classList.remove('hidden');
+    tabSignup?.classList.add(activeTabClass);
+    tabLogin?.classList.add(inactiveTabClass);
+  }
+};
+
+function setupAuthForms() {
+  // Login form
+  document.getElementById('login-form')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    setAuthError('');
+    setAuthSuccess('');
+    const email = document.getElementById('login-email')?.value.trim();
+    const password = document.getElementById('login-password')?.value;
+    const btn = document.getElementById('login-btn');
+    const spinner = document.getElementById('login-spinner');
+
+    btn?.setAttribute('disabled', 'true');
+    spinner?.classList.remove('hidden');
+
+    try {
+      await AuthManager.signIn(email, password);
+      hideAuthScreen();
+      await App.initApp();
+    } catch (err) {
+      setAuthError(err.message || 'Erro ao fazer login. Verifique suas credenciais.');
+    } finally {
+      btn?.removeAttribute('disabled');
+      spinner?.classList.add('hidden');
+    }
+  });
+
+  // Signup form
+  document.getElementById('signup-form')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    setAuthError('');
+    setAuthSuccess('');
+    const name = document.getElementById('signup-name')?.value.trim();
+    const email = document.getElementById('signup-email')?.value.trim();
+    const password = document.getElementById('signup-password')?.value;
+    const confirm = document.getElementById('signup-password-confirm')?.value;
+    const btn = document.getElementById('signup-btn');
+    const spinner = document.getElementById('signup-spinner');
+
+    if (password !== confirm) {
+      setAuthError('As senhas não coincidem.');
+      return;
+    }
+
+    btn?.setAttribute('disabled', 'true');
+    spinner?.classList.remove('hidden');
+
+    try {
+      const data = await AuthManager.signUp(email, password, name);
+      // If email confirmation is required, user will be null
+      if (data.user && data.user.email_confirmed_at == null && data.session === null) {
+        setAuthSuccess('Conta criada! Verifique seu e-mail para confirmar o cadastro.');
+      } else {
+        hideAuthScreen();
+        await App.initApp();
+      }
+    } catch (err) {
+      setAuthError(err.message || 'Erro ao criar conta. Tente novamente.');
+    } finally {
+      btn?.removeAttribute('disabled');
+      spinner?.classList.add('hidden');
+    }
+  });
+
+  // Forgot password form
+  document.getElementById('forgot-form')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    setAuthError('');
+    setAuthSuccess('');
+    const email = document.getElementById('forgot-email')?.value.trim();
+    const btn = document.getElementById('forgot-btn');
+    const spinner = document.getElementById('forgot-spinner');
+
+    btn?.setAttribute('disabled', 'true');
+    spinner?.classList.remove('hidden');
+
+    try {
+      await AuthManager.resetPasswordForEmail(email);
+      setAuthSuccess('Link de redefinição enviado! Verifique seu e-mail.');
+    } catch (err) {
+      setAuthError(err.message || 'Erro ao enviar e-mail. Tente novamente.');
+    } finally {
+      btn?.removeAttribute('disabled');
+      spinner?.classList.add('hidden');
+    }
+  });
+
+  // Forgot password button
+  document.getElementById('forgot-password-btn')?.addEventListener('click', () => {
+    setAuthError('');
+    setAuthSuccess('');
+    document.getElementById('login-form')?.classList.add('hidden');
+    document.getElementById('forgot-form')?.classList.remove('hidden');
+    document.getElementById('tab-login')?.classList.remove('bg-white', 'text-slate-900', 'shadow-sm');
+    document.getElementById('tab-login')?.classList.add('text-slate-500');
+  });
+
+  // Back to login button
+  document.getElementById('back-to-login-btn')?.addEventListener('click', () => {
+    setAuthError('');
+    setAuthSuccess('');
+    document.getElementById('forgot-form')?.classList.add('hidden');
+    document.getElementById('login-form')?.classList.remove('hidden');
+    document.getElementById('tab-login')?.classList.add('bg-white', 'text-slate-900', 'shadow-sm');
+    document.getElementById('tab-login')?.classList.remove('text-slate-500');
+  });
+}
 
 // ─── Initialize ───────────────────────────────────────
 window.ClipperApp = App;

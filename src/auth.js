@@ -1,0 +1,72 @@
+import { createClient } from '@supabase/supabase-js';
+
+export const AuthManager = {
+  client: null,
+  user: null,
+
+  init() {
+    const url = import.meta.env.VITE_SUPABASE_URL;
+    const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+    if (!url || !anonKey) {
+      console.warn('[AuthManager] Supabase not configured.');
+      return false;
+    }
+    this.client = createClient(url, anonKey);
+    return true;
+  },
+
+  async getSession() {
+    if (!this.client) return null;
+    const { data: { session } } = await this.client.auth.getSession();
+    if (session) this.user = session.user;
+    return session;
+  },
+
+  async signUp(email, password, fullName) {
+    if (!this.client) throw new Error('Supabase not configured');
+    const { data, error } = await this.client.auth.signUp({
+      email,
+      password,
+      options: { data: { full_name: fullName } }
+    });
+    if (error) throw error;
+    this.user = data.user;
+    return data;
+  },
+
+  async signIn(email, password) {
+    if (!this.client) throw new Error('Supabase not configured');
+    const { data, error } = await this.client.auth.signInWithPassword({
+      email,
+      password,
+    });
+    if (error) throw error;
+    this.user = data.user;
+    return data;
+  },
+
+  async signOut() {
+    if (!this.client) return;
+    await this.client.auth.signOut();
+    this.user = null;
+  },
+
+  onAuthStateChange(callback) {
+    if (!this.client) return null;
+    const { data: { subscription } } = this.client.auth.onAuthStateChange((event, session) => {
+      this.user = session?.user ?? null;
+      callback(event, session);
+    });
+    return subscription;
+  },
+
+  async resetPasswordForEmail(email) {
+    if (!this.client) throw new Error('Supabase not configured');
+    const { error } = await this.client.auth.resetPasswordForEmail(email);
+    if (error) throw error;
+  },
+
+  getUser() {
+    return this.user;
+  }
+};
