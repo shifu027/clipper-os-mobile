@@ -1,5 +1,11 @@
 {
   "appId": "io.clipper.os",
   "appName": "Clipper OS",
-  "webDir": "dist"
+  "webDir": "dist",
+  "android": {
+    "buildOptions": {
+      "keystorePath": null,
+      "keystoreAlias": null
+    }
+  }
 }
