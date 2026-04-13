@@ -11,7 +11,7 @@ import { CalendarManager } from './calendar.js';
 
 // ─── Helpers ────────────────────────────────────────────
 function generateId() {
-  return Date.now().toString(36) + Math.random().toString(36).substr(2);
+  return Date.now().toString(36) + Math.random().toString(36).substring(2);
 }
 
 function escapeHtml(text) {
@@ -274,6 +274,8 @@ const App = {
   },
 
   bindGlobalEvents() {
+    if (this._eventsBound) return;
+    this._eventsBound = true;
     document.getElementById('btn-backup')?.addEventListener('click', () => this.exportDataCSV());
     document.getElementById('btn-settings')?.addEventListener('click', () => this.editConfig());
     document.getElementById('btn-settings-mobile')?.addEventListener('click', () => this.editConfig());
@@ -1478,6 +1480,12 @@ const App = {
 };
 
 // ─── Auth Helpers ─────────────────────────────────────
+const AUTH_REDIRECT_DELAY_MS = 3000;
+
+function isValidEmail(email) {
+  return !!email && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+}
+
 function showAuthScreen() {
   const authScreen = document.getElementById('auth-screen');
   if (authScreen) authScreen.classList.remove('hidden');
@@ -1549,7 +1557,17 @@ function setupAuthForms() {
     const btn = document.getElementById('login-btn');
     const spinner = document.getElementById('login-spinner');
 
+    if (!email || !isValidEmail(email)) {
+      setAuthError('Por favor, insira um e-mail válido.');
+      return;
+    }
+    if (!password) {
+      setAuthError('Por favor, insira sua senha.');
+      return;
+    }
+
     btn?.setAttribute('disabled', 'true');
+    btn?.classList.add('opacity-50', 'cursor-not-allowed');
     spinner?.classList.remove('hidden');
 
     try {
@@ -1557,9 +1575,15 @@ function setupAuthForms() {
       hideAuthScreen();
       await App.initApp();
     } catch (err) {
-      setAuthError(err.message || 'Erro ao fazer login. Verifique suas credenciais.');
+      const msg = err.message || '';
+      if (msg.includes('Invalid login credentials')) {
+        setAuthError('E-mail ou senha incorretos.');
+      } else {
+        setAuthError(msg || 'Erro ao fazer login. Verifique suas credenciais.');
+      }
     } finally {
       btn?.removeAttribute('disabled');
+      btn?.classList.remove('opacity-50', 'cursor-not-allowed');
       spinner?.classList.add('hidden');
     }
   });
@@ -1576,12 +1600,25 @@ function setupAuthForms() {
     const btn = document.getElementById('signup-btn');
     const spinner = document.getElementById('signup-spinner');
 
+    if (!name) {
+      setAuthError('Por favor, insira seu nome.');
+      return;
+    }
+    if (!email || !isValidEmail(email)) {
+      setAuthError('Por favor, insira um e-mail válido.');
+      return;
+    }
+    if (!password) {
+      setAuthError('Por favor, insira uma senha.');
+      return;
+    }
     if (password !== confirm) {
       setAuthError('As senhas não coincidem.');
       return;
     }
 
     btn?.setAttribute('disabled', 'true');
+    btn?.classList.add('opacity-50', 'cursor-not-allowed');
     spinner?.classList.remove('hidden');
 
     try {
@@ -1589,14 +1626,24 @@ function setupAuthForms() {
       // If email confirmation is required, user will be null
       if (data.user && data.user.email_confirmed_at == null && data.session === null) {
         setAuthSuccess('Conta criada! Verifique seu e-mail para confirmar o cadastro.');
+        document.getElementById('signup-form')?.reset();
+        setTimeout(() => switchAuthTab('login'), AUTH_REDIRECT_DELAY_MS);
       } else {
         hideAuthScreen();
         await App.initApp();
       }
     } catch (err) {
-      setAuthError(err.message || 'Erro ao criar conta. Tente novamente.');
+      const msg = err.message || '';
+      if (msg.includes('User already registered')) {
+        setAuthError('Este e-mail já está cadastrado.');
+      } else if (msg.includes('Password should be at least 6 characters')) {
+        setAuthError('A senha deve ter no mínimo 6 caracteres.');
+      } else {
+        setAuthError(msg || 'Erro ao criar conta. Tente novamente.');
+      }
     } finally {
       btn?.removeAttribute('disabled');
+      btn?.classList.remove('opacity-50', 'cursor-not-allowed');
       spinner?.classList.add('hidden');
     }
   });
@@ -1610,7 +1657,13 @@ function setupAuthForms() {
     const btn = document.getElementById('forgot-btn');
     const spinner = document.getElementById('forgot-spinner');
 
+    if (!email || !isValidEmail(email)) {
+      setAuthError('Por favor, insira um e-mail válido.');
+      return;
+    }
+
     btn?.setAttribute('disabled', 'true');
+    btn?.classList.add('opacity-50', 'cursor-not-allowed');
     spinner?.classList.remove('hidden');
 
     try {
@@ -1620,6 +1673,7 @@ function setupAuthForms() {
       setAuthError(err.message || 'Erro ao enviar e-mail. Tente novamente.');
     } finally {
       btn?.removeAttribute('disabled');
+      btn?.classList.remove('opacity-50', 'cursor-not-allowed');
       spinner?.classList.add('hidden');
     }
   });
