@@ -114,6 +114,47 @@ See [docs/app-store-checklist.md](docs/app-store-checklist.md) for full App Stor
 | Android  | `versionName` (e.g., "1.0.0")  | `versionCode` (integer) | `android/app/build.gradle`            |
 | iOS      | `MARKETING_VERSION` (e.g., 1.0) | `CURRENT_PROJECT_VERSION` (integer) | Xcode project settings |
 
+## GitHub Actions Secrets (CI/CD)
+
+The Android build, iOS sync, and release workflows require the following secrets to be configured in your GitHub repository so that the Supabase sync feature works in CI-built APKs/AABs.
+
+### Required Secrets
+
+| Secret Name           | Description                                      |
+|-----------------------|--------------------------------------------------|
+| `VITE_SUPABASE_URL`   | Your Supabase project URL (e.g. `https://xyz.supabase.co`) |
+| `VITE_SUPABASE_ANON_KEY` | Your Supabase anonymous/public API key        |
+
+> These are injected at build time via `import.meta.env` in `src/supabase.js`.  
+> If left empty the app builds successfully but the cloud sync feature is disabled.
+
+### How to Add Secrets
+
+1. Go to **https://github.com/{username}/{repository}/settings/secrets/actions**
+2. Click **"New repository secret"**
+3. Add each secret listed above with its value from your Supabase dashboard:  
+   **Supabase Dashboard → your project → Settings → API**
+
+### Optional Android Signing Secrets
+
+| Secret Name        | Description                                  |
+|--------------------|----------------------------------------------|
+| `KEYSTORE_BASE64`  | Base64-encoded Android release keystore      |
+| `KEYSTORE_PASSWORD`| Keystore password                            |
+| `KEY_ALIAS`        | Key alias inside the keystore                |
+| `KEY_PASSWORD`     | Key password                                 |
+
+See [docs/github-secrets-setup.md](docs/github-secrets-setup.md) for full keystore setup instructions.
+
+### Local Environment Setup
+
+```bash
+# Copy .env.example to .env (run once after cloning)
+bash scripts/setup-env.sh
+
+# Then edit .env and fill in your Supabase values
+```
+
 ## Gemini AI Integration
 
 The AI feature is **disabled by default** in production for security.
