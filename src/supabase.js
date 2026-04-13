@@ -13,7 +13,7 @@
  *     FOR ALL USING (auth.uid() = user_id);
  */
 
-import { createClient } from '@supabase/supabase-js';
+import { AuthManager } from './auth.js';
 
 export const SyncManager = {
   client: null,
@@ -22,27 +22,16 @@ export const SyncManager = {
   enabled: false,
 
   async init() {
-    const url = import.meta.env.VITE_SUPABASE_URL;
-    const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
-
-    if (!url || !anonKey) {
-      console.log('[SyncManager] Supabase not configured. Running in offline mode.');
+    if (!AuthManager.client || !AuthManager.user) {
+      console.log('[SyncManager] No authenticated user. Running offline.');
       return false;
     }
 
     try {
-      this.client = createClient(url, anonKey);
-
-      // Sign in anonymously
-      const { data: authData, error } = await this.client.auth.signInAnonymously();
-      if (error) {
-        console.warn('[SyncManager] Anonymous sign-in failed:', error.message);
-        return false;
-      }
-
-      this.userId = authData.user?.id ?? null;
-      this.enabled = !!this.userId;
-      return this.enabled;
+      this.client = AuthManager.client;
+      this.userId = AuthManager.user.id;
+      this.enabled = true;
+      return true;
     } catch (e) {
       console.warn('[SyncManager] init failed:', e);
       return false;
@@ -110,5 +99,12 @@ export const SyncManager = {
       this.client.removeChannel(this.channel);
       this.channel = null;
     }
+  },
+
+  reset() {
+    this.disconnect();
+    this.client = null;
+    this.userId = null;
+    this.enabled = false;
   },
 };
