@@ -34,6 +34,14 @@ function formatDate(dateStr) {
   }
 }
 
+function csvEscape(val) {
+  const str = String(val ?? '');
+  if (str.includes(',') || str.includes('"') || str.includes('\n') || str.includes('\r')) {
+    return '"' + str.replace(/"/g, '""') + '"';
+  }
+  return str;
+}
+
 // ─── Data Layer ─────────────────────────────────────────
 const STORAGE_KEY = 'clipperOS_StateV2';
 
@@ -1403,8 +1411,7 @@ const App = {
     let csvContent = 'data:text/csv;charset=utf-8,';
     csvContent += 'ID,Title,Platform,Category,Posted Date,Performance,Link\n';
     this.state.history.forEach(row => {
-      const cleanTitle = (row.title || '').replace(/,/g, ' ');
-      csvContent += `${row.id},${cleanTitle},${row.platform},${row.category},${row.postedAt},${row.performance},${row.link}\n`;
+      csvContent += [row.id, row.title, row.platform, row.category, row.postedAt, row.performance, row.link].map(csvEscape).join(',') + '\n';
     });
     const link = document.createElement('a');
     link.setAttribute('href', encodeURI(csvContent));
@@ -1511,23 +1518,27 @@ window.switchAuthTab = function(tab) {
   forgotForm?.classList.add('hidden');
 
   // Reset tab styles
-  const activeTabClass = 'bg-white text-slate-900 shadow-sm';
-  const inactiveTabClass = 'text-slate-500';
-  tabLogin?.classList.remove(activeTabClass, inactiveTabClass);
-  tabSignup?.classList.remove(activeTabClass, inactiveTabClass);
+  const activeClasses = ['bg-white', 'text-slate-900', 'shadow-sm'];
+  const inactiveClasses = ['text-slate-500'];
+  tabLogin?.classList.remove(...activeClasses, ...inactiveClasses);
+  tabSignup?.classList.remove(...activeClasses, ...inactiveClasses);
 
   if (tab === 'login') {
     loginForm?.classList.remove('hidden');
-    tabLogin?.classList.add(activeTabClass);
-    tabSignup?.classList.add(inactiveTabClass);
+    tabLogin?.classList.add(...activeClasses);
+    tabSignup?.classList.add(...inactiveClasses);
   } else {
     signupForm?.classList.remove('hidden');
-    tabSignup?.classList.add(activeTabClass);
-    tabLogin?.classList.add(inactiveTabClass);
+    tabSignup?.classList.add(...activeClasses);
+    tabLogin?.classList.add(...inactiveClasses);
   }
 };
 
 function setupAuthForms() {
+  // Auth tab event listeners (replaces inline onclick attributes)
+  document.getElementById('tab-login')?.addEventListener('click', () => switchAuthTab('login'));
+  document.getElementById('tab-signup')?.addEventListener('click', () => switchAuthTab('signup'));
+
   // Login form
   document.getElementById('login-form')?.addEventListener('submit', async (e) => {
     e.preventDefault();
