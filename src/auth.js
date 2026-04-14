@@ -5,8 +5,10 @@ export const AuthManager = {
   user: null,
 
   init() {
-    const url = import.meta.env.VITE_SUPABASE_URL;
-    const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+    // Sanitize with .trim() to remove invisible line breaks (%0A) or spaces
+    const url = (import.meta.env.VITE_SUPABASE_URL || '').trim();
+    const anonKey = (import.meta.env.VITE_SUPABASE_ANON_KEY || '').trim();
+
     if (!url || !anonKey) {
       console.warn('[AuthManager] Supabase not configured.');
       return false;

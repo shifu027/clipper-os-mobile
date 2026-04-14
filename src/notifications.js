@@ -1,3 +1,5 @@
+import { Capacitor } from '@capacitor/core';
+
 /**
  * NotificationManager — Local notifications via @capacitor/local-notifications
  * Gracefully degrades when running in a browser or when permission is denied.
@@ -7,10 +9,18 @@ let LocalNotifications = null;
 
 async function getLocalNotifications() {
   if (LocalNotifications) return LocalNotifications;
+
+  // ─── CRITICAL FIX: Only try native notifications if NOT on web ───────
+  if (Capacitor.getPlatform() === 'web') {
+    console.log('[NotificationManager] Native notifications disabled on Web.');
+    return null;
+  }
+
   try {
     const mod = await import('@capacitor/local-notifications');
     LocalNotifications = mod.LocalNotifications;
-  } catch {
+  } catch (e) {
+    console.warn('[NotificationManager] Failed to load local-notifications plugin', e);
     LocalNotifications = null;
   }
   return LocalNotifications;
