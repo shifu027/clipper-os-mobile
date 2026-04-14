@@ -71,7 +71,7 @@ export const VideoManagerUI = {
 
         <div class="p-5 flex-1 flex flex-col">
           <div class="flex justify-between items-start mb-2 gap-2">
-            <h4 class="font-bold text-slate-800 text-sm leading-tight line-clamp-2 flex-1">${escapeHtml(video.name)}</h4>
+            <h4 class="font-bold text-slate-800 text-sm leading-tight line-clamp-2 flex-1">${escapeHtml(video.title)}</h4>
             <div class="dropdown relative">
               <button data-action="video-options" data-id="${video.id}" class="text-slate-300 hover:text-slate-600 w-8 h-8 rounded-full hover:bg-slate-50 flex items-center justify-center transition-colors">
                 <i class="fa-solid fa-ellipsis-vertical"></i>

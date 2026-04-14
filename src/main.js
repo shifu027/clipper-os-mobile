@@ -153,196 +153,10 @@ function initBackground() {
   render();
 }
 
-// ─── Helpers ────────────────────────────────────────────
-function generateId() {
-  return Date.now().toString(36) + Math.random().toString(36).substring(2);
-}
-
-function escapeHtml(text) {
-  if (!text) return '';
-  const div = document.createElement('div');
-  div.appendChild(document.createTextNode(String(text)));
-  return div.innerHTML;
-}
-
-function todayStr() {
-  return new Date().toISOString().split('T')[0];
-}
-
-function formatDate(dateStr) {
-  if (!dateStr) return '';
-  try {
-    return new Date(dateStr).toLocaleDateString('pt-BR', { month: 'short', day: 'numeric', year: 'numeric' });
-  } catch {
-    return dateStr;
-  }
-}
-
-function csvEscape(val) {
-  const str = String(val ?? '');
-  if (str.includes(',') || str.includes('"') || str.includes('\n') || str.includes('\r')) {
-    return '"' + str.replace(/"/g, '""') + '"';
-  }
-  return str;
-}
-
-// ─── Data Layer ─────────────────────────────────────────
-const STORAGE_KEY = 'clipperOS_StateV2';
-
-const DEFAULT_STATE = {
-  currentView: 'dashboard',
-  config: { channel: '', niche: '', frequency: '2', cloudLinks: {}, team: 'Me', notificationsEnabled: undefined, calendarAutoAdd: false },
-  library: [],
-  clips: [],
-  routine: [],
-  history: [],
-  geminiTool: 'hooks',
-  filterDate: todayStr(),
-};
-
+// ─── App Controller ─────────────────────────────────────
 const PLATFORMS = ['TikTok', 'Instagram Reels', 'YouTube Shorts', 'LinkedIn', 'Facebook', 'X / Twitter'];
 const TAGS = ['viral', 'vendas', 'engajamento', 'atemporal', 'tutorial', 'reutilizável', 'tendência'];
 
-async function loadState() {
-  // 1. Try loading from Supabase (if configured)
-  try {
-    if (SyncManager.enabled) {
-      const cloudState = await SyncManager.load();
-      if (cloudState) {
-        const migrated = migrateState({ ...DEFAULT_STATE, ...cloudState });
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(migrated)); // Update local cache
-        return migrated;
-      }
-    }
-  } catch (e) {
-    console.warn('[loadState] Cloud load failed, falling back to localStorage', e);
-  }
-
-  // 2. Fallback: localStorage
-  return loadStateSync();
-}
-
-function loadStateSync() {
-  const raw = localStorage.getItem(STORAGE_KEY);
-  if (raw) {
-    try {
-      const parsed = JSON.parse(raw);
-      return migrateState({ ...DEFAULT_STATE, ...parsed });
-    } catch (e) {
-      console.error('Failed to load state', e);
-    }
-  }
-  // Try migrating from old v1 key
-  const v1 = localStorage.getItem('clipper_os_data');
-  if (v1) {
-    try {
-      const old = JSON.parse(v1);
-      const migrated = { ...DEFAULT_STATE };
-      if (Array.isArray(old.library)) migrated.library = old.library.map(migrateLibraryItem);
-      if (Array.isArray(old.clips)) migrated.clips = old.clips.map(migrateClipItem);
-      if (Array.isArray(old.routine)) migrated.routine = old.routine.map(migrateRoutineItem);
-      if (Array.isArray(old.pipeline)) {
-        old.pipeline.forEach(item => {
-          migrated.library.push(migrateLibraryItem({ ...item, tags: ['imported'] }));
-        });
-      }
-      localStorage.removeItem('clipper_os_data');
-      return migrated;
-    } catch (e) {
-      console.error('Failed to migrate v1 data', e);
-    }
-  }
-  return { ...DEFAULT_STATE };
-}
-
-function migrateState(state) {
-  // Ensure all arrays exist
-  if (!Array.isArray(state.library)) state.library = [];
-  if (!Array.isArray(state.clips)) state.clips = [];
-  if (!Array.isArray(state.routine)) state.routine = [];
-  if (!Array.isArray(state.history)) state.history = [];
-  if (!state.config) state.config = { ...DEFAULT_STATE.config };
-  if (!state.config.cloudLinks) state.config.cloudLinks = {};
-  if (!state.filterDate) state.filterDate = todayStr();
-
-  // Normalize items
-  state.library = state.library.map(migrateLibraryItem);
-  state.clips = state.clips.map(migrateClipItem);
-  state.routine = state.routine.map(migrateRoutineItem);
-  state.history = state.history.map(migrateHistoryItem);
-  return state;
-}
-
-function migrateLibraryItem(item) {
-  const tagMap = {
-    'sales': 'vendas',
-    'engagement': 'engajamento',
-    'evergreen': 'atemporal',
-    'reusable': 'reutilizável',
-    'trending': 'tendência'
-  };
-  let tags = Array.isArray(item.tags) ? item.tags : [];
-  tags = tags.map(t => tagMap[t.toLowerCase()] || t);
-
-  return {
-    id: item.id || generateId(),
-    title: item.title || 'Sem Título',
-    type: item.type || 'Vídeo Curto',
-    tags: tags,
-    link: item.link || '',
-    team: item.team || '',
-    notes: item.notes || '',
-    platform: item.platform || '',
-    createdAt: item.createdAt || Date.now(),
-  };
-}
-
-function migrateClipItem(item) {
-  return {
-    id: item.id || generateId(),
-    title: item.title || 'Clipe Sem Título',
-    minIn: item.minIn || '00:00',
-    minOut: item.minOut || '00:00',
-    hook: item.hook || item.gancho || '',
-    cta: item.cta || '',
-    platform: item.platform || '',
-    status: item.status || 'raw',
-    content: item.content || '',
-    createdAt: item.createdAt || Date.now(),
-  };
-}
-
-function migrateRoutineItem(item) {
-  return {
-    id: item.id || generateId(),
-    date: item.date || todayStr(),
-    time: item.time || '12:00',
-    platform: item.platform || 'Pendente',
-    assetId: item.assetId || null,
-    source: item.source || null,
-    isPosted: item.isPosted || false,
-  };
-}
-
-function migrateHistoryItem(item) {
-  return {
-    id: item.id || generateId(),
-    assetId: item.assetId || '',
-    title: item.title || 'Sem Título',
-    platform: item.platform || '',
-    category: item.category || 'Clipe',
-    postedAt: item.postedAt || new Date().toISOString(),
-    performance: item.performance || 'Pendente',
-    link: item.link || '',
-  };
-}
-
-function saveState(state) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-  SyncManager.save(state); // fire-and-forget cloud sync
-}
-
-// ─── App Controller ─────────────────────────────────────
 const App = {
   state: null, // Will be loaded in init
   syncStatus: 'offline', // 'offline' | 'syncing' | 'synced'
@@ -471,6 +285,17 @@ const App = {
         location.reload(); // Hard reload for clean state
       };
     }
+
+    // Navigation Event Delegation
+    const handleNav = (e) => {
+      const btn = e.target.closest('[data-nav]');
+      if (btn) {
+        e.preventDefault();
+        this.changeView(btn.dataset.nav);
+      }
+    };
+    document.getElementById('desktop-nav')?.addEventListener('click', handleNav);
+    document.getElementById('mobile-nav')?.addEventListener('click', handleNav);
   },
 
   // ─── Navigation ─────────────────────────────────────
@@ -517,14 +342,6 @@ const App = {
 
       mobileNav.innerHTML = mobileViews.map(v => createBtn(v, true)).join('');
     }
-
-    // Bind nav clicks
-    document.querySelectorAll('[data-nav]').forEach(btn => {
-      btn.addEventListener('click', (e) => {
-        e.preventDefault();
-        this.changeView(btn.dataset.nav);
-      });
-    });
   },
 
   // ─── Render Router ──────────────────────────────────
@@ -888,16 +705,17 @@ const App = {
         </div>`
       : readyContent.map(item => {
           const isVideo = !!item.thumbnailUrl;
+          const source = item.type ? 'library' : (isVideo ? 'videoAsset' : 'clip');
           return `
-          <div class="bg-white p-3 rounded-2xl shadow-sm border border-slate-200 mb-3 hover:border-blue-400 transition-all group">
-            <div class="flex gap-3">
+          <div class="bg-white p-3 rounded-2xl shadow-sm border border-slate-200 mb-3 hover:border-blue-400 transition-all group cursor-move draggable-item" draggable="true" data-id="${item.id}" data-source="${source}">
+            <div class="flex gap-3 pointer-events-none">
               ${isVideo ? `<img src="${item.thumbnailUrl}" class="w-12 h-12 rounded-lg object-cover bg-slate-100" />` : `<div class="w-12 h-12 rounded-lg bg-slate-100 flex items-center justify-center text-slate-400"><i class="fa-solid fa-file-lines"></i></div>`}
               <div class="flex-1 min-w-0">
                 <div class="text-[9px] font-black text-slate-400 uppercase tracking-tighter mb-0.5">${escapeHtml(item.type || (isVideo ? 'Vídeo' : 'Clipe'))}</div>
-                <h4 class="text-xs font-bold text-slate-800 leading-tight line-clamp-2">${escapeHtml(item.title || item.name)}</h4>
+                <h4 class="text-xs font-bold text-slate-800 leading-tight line-clamp-2">${escapeHtml(item.title)}</h4>
               </div>
             </div>
-            <button data-action="schedule-asset" data-id="${item.id}" data-source="${item.type ? 'library' : (isVideo ? 'videoAsset' : 'clip')}" class="w-full mt-3 bg-slate-50 group-hover:bg-blue-600 group-hover:text-white text-slate-500 border border-slate-100 group-hover:border-blue-600 text-[10px] font-black py-2 rounded-xl transition-all uppercase tracking-widest">
+            <button data-action="schedule-asset" data-id="${item.id}" data-source="${source}" class="w-full mt-3 bg-slate-50 group-hover:bg-blue-600 group-hover:text-white text-slate-500 border border-slate-100 group-hover:border-blue-600 text-[10px] font-black py-2 rounded-xl transition-all uppercase tracking-widest">
               Agendar
             </button>
           </div>
@@ -1299,6 +1117,9 @@ const App = {
     const content = document.getElementById('app-content');
     if (!content) return;
 
+    // Drag-and-Drop Support for Pipeline
+    this.setupDragAndDrop();
+
     content.addEventListener('click', (e) => {
       const btn = e.target.closest('[data-action]');
       if (!btn) return;
@@ -1347,6 +1168,57 @@ const App = {
     });
   },
 
+  // ─── Drag-and-Drop ──────────────────────────────────
+  setupDragAndDrop() {
+    if (this.state.currentView !== 'pipeline') return;
+
+    const draggables = document.querySelectorAll('.draggable-item');
+    const dropzones = document.querySelectorAll('[data-action="attach-content"]');
+
+    draggables.forEach(el => {
+      el.addEventListener('dragstart', (e) => {
+        const item = {
+          id: el.dataset.id,
+          source: el.dataset.source
+        };
+        e.dataTransfer.setData('application/json', JSON.stringify(item));
+        el.classList.add('opacity-50', 'scale-95');
+      });
+
+      el.addEventListener('dragend', () => {
+        el.classList.remove('opacity-50', 'scale-95');
+      });
+    });
+
+    dropzones.forEach(zone => {
+      const container = zone.closest('.bg-white');
+
+      container.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        container.classList.add('border-blue-500', 'bg-blue-50/50');
+      });
+
+      container.addEventListener('dragleave', () => {
+        container.classList.remove('border-blue-500', 'bg-blue-50/50');
+      });
+
+      container.addEventListener('drop', (e) => {
+        e.preventDefault();
+        container.classList.remove('border-blue-500', 'bg-blue-50/50');
+
+        try {
+          const data = JSON.parse(e.dataTransfer.getData('application/json'));
+          const slotId = zone.dataset.id;
+          if (data.id && slotId) {
+            this.attachToSlot(slotId, data.id, data.source);
+          }
+        } catch (err) {
+          console.error('[DnD] Drop failed:', err);
+        }
+      });
+    });
+  },
+
   // ─── Business Logic ─────────────────────────────────
   findAsset(assetId, source) {
     if (!assetId) return null;
@@ -1384,7 +1256,7 @@ const App = {
                 ${item.thumbnailUrl ? `<img src="${item.thumbnailUrl}" class="w-10 h-10 rounded-lg object-cover" />` : `<div class="w-10 h-10 rounded-lg bg-slate-100 flex items-center justify-center text-slate-400"><i class="fa-solid fa-file-lines"></i></div>`}
                 <div class="flex-1 min-w-0">
                   <div class="text-[8px] font-black text-slate-400 uppercase">${escapeHtml(item.type || (item.thumbnailUrl ? 'Vídeo' : 'Clipe'))}</div>
-                  <div class="text-xs font-bold text-slate-800 truncate">${escapeHtml(item.title || item.name)}</div>
+                  <div class="text-xs font-bold text-slate-800 truncate">${escapeHtml(item.title)}</div>
                 </div>
                 <i class="fa-solid fa-chevron-right text-slate-300 group-hover:text-blue-500 text-[10px]"></i>
               </button>
@@ -1473,7 +1345,7 @@ const App = {
           if (!this.state.videoAssets.some(v => v.id === f.id)) {
             this.state.videoAssets.push({
               id: f.id,
-              name: f.name,
+              title: f.name,
               thumbnailUrl: f.thumbnail,
               duration: f.duration,
               status: 'novo',
@@ -1514,7 +1386,7 @@ const App = {
         </div>
         <div class="absolute bottom-4 left-4 right-4 bg-black/60 backdrop-blur-md p-4 rounded-xl text-white">
           <div class="text-xs font-black uppercase tracking-widest text-blue-400 mb-1">Visualização</div>
-          <div class="font-bold truncate">${escapeHtml(video.name)}</div>
+          <div class="font-bold truncate">${escapeHtml(video.title)}</div>
         </div>
       </div>
       <div class="mt-4 grid grid-cols-2 gap-3">
@@ -1540,7 +1412,7 @@ const App = {
       <div class="space-y-4">
         <div>
           <label class="block text-xs font-bold text-slate-400 mb-1 uppercase tracking-wider">Nome do Arquivo</label>
-          <input type="text" id="edit-video-name" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm outline-none" value="${escapeHtml(video.name)}">
+          <input type="text" id="edit-video-title" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm outline-none" value="${escapeHtml(video.title)}">
         </div>
         <div>
           <label class="block text-xs font-bold text-slate-400 mb-1 uppercase tracking-wider">Status do Fluxo</label>
@@ -1554,7 +1426,7 @@ const App = {
     this.openModal('Editar Vídeo', body, `<button id="btn-update-video" class="w-full bg-blue-600 text-white font-bold py-3.5 rounded-xl shadow-md">Salvar Alterações</button>`);
 
     document.getElementById('btn-update-video')?.addEventListener('click', () => {
-      video.name = document.getElementById('edit-video-name').value;
+      video.title = document.getElementById('edit-video-title').value;
       video.status = document.getElementById('edit-video-status').value;
       saveState(this.state);
       this.closeModal();
@@ -1568,7 +1440,7 @@ const App = {
       <div class="space-y-4">
         <div>
           <label class="block text-xs font-bold text-slate-400 mb-1 uppercase tracking-wider">Nome do Vídeo</label>
-          <input type="text" id="new-video-name" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm outline-none" placeholder="Ex: Meu Vídeo Incrível">
+          <input type="text" id="new-video-title" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm outline-none" placeholder="Ex: Meu Vídeo Incrível">
         </div>
         <div class="grid grid-cols-2 gap-3">
           <div>
@@ -1593,12 +1465,12 @@ const App = {
     this.openModal('Importar Vídeo', body, `<button id="btn-save-new-video" class="w-full bg-slate-900 text-white font-bold py-3.5 rounded-xl shadow-md">Importar</button>`);
 
     document.getElementById('btn-save-new-video')?.addEventListener('click', () => {
-      const name = document.getElementById('new-video-name').value;
-      if (!name) return this.showToast('Nome é obrigatório', 'error');
+      const title = document.getElementById('new-video-title').value;
+      if (!title) return this.showToast('Nome é obrigatório', 'error');
 
       this.state.videoAssets.push({
         id: generateId(),
-        name,
+        title,
         duration: document.getElementById('new-video-dur').value || '00:00',
         status: document.getElementById('new-video-status').value,
         thumbnailUrl: document.getElementById('new-video-thumb').value || 'https://via.placeholder.com/400x225?text=Video',
@@ -2298,7 +2170,7 @@ function setupAuthForms() {
       await AuthManager.signIn(email, password);
       hideAuthScreen();
       // Ensure state is fresh and UI is cleared before re-init
-      App.state = loadStateSync();
+      App.state = await loadState();
       await App.initApp();
       App.showToast('Bem-vindo de volta!', 'success');
     } catch (err) {

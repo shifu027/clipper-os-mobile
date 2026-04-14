@@ -1,4 +1,5 @@
 import { SyncManager } from './supabase.js';
+import { todayStr } from './utils.js';
 
 export const STORAGE_KEY = 'clipperOS_StateV3'; // Upgraded version
 
@@ -48,12 +49,12 @@ export function migrateState(state) {
 
   // Specific item migrations if needed
   state.library = state.library.map(migrateLibraryItem);
+  state.clips = state.clips.map(migrateClipItem);
+  state.routine = state.routine.map(migrateRoutineItem);
+  state.history = state.history.map(migrateHistoryItem);
+  state.videoAssets = state.videoAssets.map(migrateVideoAsset);
 
-  // V2 to V3 Migration Logic: If routine has items with assetId but they aren't in scheduledPosts,
-  // we might want to keep them compatible or migrate them.
-  // For now, we'll keep routine as the "Source of Truth" for the agenda slots,
-  // but Video Manager will use scheduledPosts for its specific logic if needed.
-  // Actually, let's keep routine for the agenda slots but allow them to reference videoAssets.
+  // V2 to V3 Migration Logic
 
   return state;
 }
@@ -82,14 +83,70 @@ function migrateLibraryItem(item) {
   };
 }
 
+function migrateClipItem(item) {
+  return {
+    id: item.id || generateId(),
+    title: item.title || 'Clipe Sem Título',
+    minIn: item.minIn || '00:00',
+    minOut: item.minOut || '00:00',
+    hook: item.hook || item.gancho || '',
+    cta: item.cta || '',
+    platform: item.platform || '',
+    status: item.status || 'raw',
+    content: item.content || '',
+    createdAt: item.createdAt || Date.now(),
+  };
+}
+
+function migrateRoutineItem(item) {
+  return {
+    id: item.id || generateId(),
+    date: item.date || todayStr(),
+    time: item.time || '12:00',
+    platform: item.platform || 'Pendente',
+    assetId: item.assetId || null,
+    source: item.source || null,
+    isPosted: item.isPosted || false,
+  };
+}
+
+function migrateHistoryItem(item) {
+  return {
+    id: item.id || generateId(),
+    assetId: item.assetId || '',
+    title: item.title || 'Sem Título',
+    platform: item.platform || '',
+    category: item.category || 'Clipe',
+    postedAt: item.postedAt || new Date().toISOString(),
+    performance: item.performance || 'Pendente',
+    link: item.link || '',
+  };
+}
+
+function migrateVideoAsset(item) {
+  return {
+    id: item.id || generateId(),
+    title: item.title || item.name || 'Sem Título',
+    thumbnailUrl: item.thumbnailUrl || '',
+    duration: item.duration || '00:00',
+    status: item.status || 'novo',
+    sourceProvider: item.sourceProvider || 'Manual',
+    sourceFolder: item.sourceFolder || 'Upload',
+    createdAt: item.createdAt || Date.now(),
+  };
+}
+
 export async function loadState() {
+  const user = SyncManager.userId;
+  const userKey = user ? `${STORAGE_KEY}_${user}` : STORAGE_KEY;
+
   // 1. Try cloud
   try {
     if (SyncManager.enabled) {
       const cloudState = await SyncManager.load();
       if (cloudState) {
         const migrated = migrateState(cloudState);
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(migrated));
+        localStorage.setItem(userKey, JSON.stringify(migrated));
         return migrated;
       }
     }
@@ -97,8 +154,10 @@ export async function loadState() {
     console.warn('[State] Cloud load failed', e);
   }
 
-  // 2. Local fallback (Try V3 then V2 then V1)
-  let raw = localStorage.getItem(STORAGE_KEY);
+  // 2. Local fallback
+  let raw = localStorage.getItem(userKey);
+  // Fallback to generic key if user-specific not found (for first login migration)
+  if (!raw && user) raw = localStorage.getItem(STORAGE_KEY);
   if (!raw) raw = localStorage.getItem('clipperOS_StateV2');
   if (!raw) raw = localStorage.getItem('clipper_os_data');
 
@@ -115,7 +174,10 @@ export async function loadState() {
 }
 
 export function saveState(state) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  const user = SyncManager.userId;
+  const userKey = user ? `${STORAGE_KEY}_${user}` : STORAGE_KEY;
+
+  localStorage.setItem(userKey, JSON.stringify(state));
   if (SyncManager.enabled) {
     SyncManager.save(state);
   }
