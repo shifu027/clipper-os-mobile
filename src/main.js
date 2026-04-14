@@ -492,7 +492,13 @@ const App = {
         mobileViewIds = ['dashboard', 'pipeline', 'clipper', 'gemini', 'admin'];
       }
 
-      const mobileViews = mobileViewIds.map(id => findView(id)).filter(Boolean);
+      let mobileViews = mobileViewIds.map(id => findView(id)).filter(Boolean);
+
+      // Fallback if views weren't found for some reason
+      if (mobileViews.length === 0) {
+        mobileViews = this.views.slice(0, 5);
+      }
+
       mobileNav.innerHTML = mobileViews.map(v => createBtn(v, true)).join('');
     }
 
@@ -502,18 +508,6 @@ const App = {
         e.preventDefault();
         this.changeView(btn.dataset.nav);
       });
-    });
-  },
-
-      // Fallback if views weren't found for some reason
-      if (mobileViews.length === 0) mobileViews = this.views.slice(0, 5);
-
-      mobileNav.innerHTML = mobileViews.map(v => createBtn(v, true)).join('');
-    }
-
-    // Bind nav clicks
-    document.querySelectorAll('[data-nav]').forEach(btn => {
-      btn.addEventListener('click', () => this.changeView(btn.dataset.nav));
     });
   },
 
