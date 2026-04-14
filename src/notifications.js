@@ -66,7 +66,7 @@ export const NotificationManager = {
       await LN.schedule({
         notifications: [{
           id: slotNotificationId(slot.id),
-          title: '⏰ Time to post!',
+          title: '⏰ Hora de postar!',
           body: `${assetTitle} — ${slot.platform}`,
           schedule: { at: dt },
           extra: { slotId: slot.id },

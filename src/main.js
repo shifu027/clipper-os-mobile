@@ -4,6 +4,10 @@ import { NotificationManager } from './notifications.js';
 import { AuthManager } from './auth.js';
 import { SyncManager } from './supabase.js';
 import { CalendarManager } from './calendar.js';
+import { loadState, saveState, migrateState, STORAGE_KEY, generateId } from './state.js';
+import { VideoManagerUI } from './videoManager.js';
+import { PROVIDERS, getConnector } from './cloudConnectors.js';
+import { escapeHtml, formatDate, todayStr, csvEscape } from './utils.js';
 
 /**
  * Clipper OS — Content Management Studio
@@ -340,12 +344,13 @@ function saveState(state) {
 
 // ─── App Controller ─────────────────────────────────────
 const App = {
-  state: loadStateSync(),
+  state: null, // Will be loaded in init
   syncStatus: 'offline', // 'offline' | 'syncing' | 'synced'
   isAdmin: false,
 
   views: [
     { id: 'dashboard', icon: 'fa-house', name: 'Início' },
+    { id: 'videos', icon: 'fa-clapperboard', name: 'Vídeos' },
     { id: 'pipeline', icon: 'fa-calendar-days', name: 'Pipeline' },
     { id: 'library', icon: 'fa-photo-film', name: 'Biblioteca' },
     { id: 'clipper', icon: 'fa-scissors', name: 'Clipes' },
@@ -354,6 +359,7 @@ const App = {
   ],
 
   async init() {
+    this.state = await loadState();
     // ── Auth gate ───────────────────────────────────────
     const authConfigured = AuthManager.init();
 
@@ -535,6 +541,7 @@ const App = {
 
     const renderers = {
       dashboard: () => this.getDashboardHTML(),
+      videos: () => VideoManagerUI.renderVideoManager(this.state),
       pipeline: () => this.getPipelineHTML(),
       library: () => this.getLibraryHTML(),
       clipper: () => this.getClipperHTML(),
@@ -792,6 +799,8 @@ const App = {
     }
 
     const selectedDate = this.state.filterDate;
+    const activeFilter = this.state.activeNetworkFilter || 'Todas';
+
     const calendarHTML = days.map(d => `
       <button data-action="set-date" data-date="${d.dateStr}" class="flex-1 flex flex-col items-center p-3 rounded-2xl transition-all border ${selectedDate === d.dateStr ? 'bg-blue-600 text-white border-blue-600 shadow-md' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'}">
         <span class="text-[10px] uppercase font-bold opacity-80 mb-1">${d.dayName}</span>
@@ -799,84 +808,139 @@ const App = {
       </button>
     `).join('');
 
-    const slots = this.state.routine.filter(r => r.date === selectedDate).sort((a, b) => a.time.localeCompare(b.time));
+    const filterPlatforms = ['Todas', ...PLATFORMS];
+    const filtersHTML = filterPlatforms.map(p => `
+      <button data-action="filter-network" data-network="${p}" class="px-4 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap border ${activeFilter === p ? 'bg-slate-900 text-white border-slate-900' : 'bg-white text-slate-500 border-slate-200 hover:bg-slate-50'}">
+        ${p}
+      </button>
+    `).join('');
+
+    let slots = this.state.routine.filter(r => r.date === selectedDate);
+    if (activeFilter !== 'Todas') {
+      slots = slots.filter(r => r.platform.includes(activeFilter) || r.platform === 'Auto' || r.platform === 'Pendente');
+    }
+    slots.sort((a, b) => a.time.localeCompare(b.time));
 
     const slotsHTML = slots.length === 0
-      ? `<div class="text-center py-10 text-slate-400 border-2 border-dashed border-slate-200 rounded-2xl bg-white">
-           <i class="fa-solid fa-calendar-xmark text-3xl mb-3 text-slate-300"></i>
-           <p class="text-sm">Nenhum item agendado para este dia.</p>
-           <button data-action="add-slot" data-date="${selectedDate}" class="mt-3 text-sm font-bold text-blue-500 hover:underline">+ Adicionar Horário</button>
+      ? `<div class="text-center py-12 text-slate-400 border-2 border-dashed border-slate-200 rounded-3xl bg-white">
+           <i class="fa-solid fa-calendar-xmark text-4xl mb-4 text-slate-200"></i>
+           <p class="text-sm font-medium">Nenhum slot para esta combinação.</p>
+           <button data-action="add-slot" data-date="${selectedDate}" class="mt-4 text-sm font-bold text-blue-600 hover:underline">+ Adicionar Horário Operacional</button>
          </div>`
       : slots.map(slot => {
           const asset = this.findAsset(slot.assetId, slot.source);
+          const isAuto = slot.platform === 'Auto' || slot.platform === 'Pendente';
+
           return `
-          <div class="bg-white p-4 rounded-2xl shadow-sm border border-slate-200 mb-3 flex gap-4 items-center">
-            <div class="font-bold text-slate-700 w-12 text-center text-lg">${escapeHtml(slot.time)}</div>
-            <div class="flex-1 border-l border-slate-100 pl-4 py-1">
+          <div class="bg-white p-5 rounded-3xl shadow-sm border ${asset ? 'border-blue-100 bg-blue-50/10' : 'border-slate-200'} mb-4 flex gap-5 items-center group transition-all hover:shadow-md">
+            <div class="flex flex-col items-center justify-center w-16 h-16 rounded-2xl bg-slate-50 border border-slate-100 group-hover:bg-white transition-colors">
+              <span class="text-lg font-black text-slate-800">${escapeHtml(slot.time)}</span>
+              <span class="text-[8px] font-black uppercase tracking-tighter text-slate-400">OPERACIONAL</span>
+            </div>
+
+            <div class="flex-1 min-w-0">
+              <div class="flex items-center gap-2 mb-1.5">
+                <span class="text-[10px] font-black text-blue-600 uppercase tracking-widest bg-blue-50 px-2 py-0.5 rounded-lg border border-blue-100">
+                  ${escapeHtml(slot.platform === 'Auto' ? 'Smart Slot' : slot.platform)}
+                </span>
+                ${slot.isPosted ? '<span class="text-[9px] font-bold text-green-600 bg-green-50 px-2 py-0.5 rounded-lg"><i class="fa-solid fa-check mr-1"></i> PUBLICADO</span>' : ''}
+              </div>
+
               ${asset
-                ? `<div class="flex justify-between items-start">
+                ? `<div class="flex justify-between items-center gap-3">
                      <div class="flex-1 min-w-0">
-                       <span class="text-[9px] font-bold text-slate-500 uppercase tracking-wider bg-slate-100 px-2 py-0.5 rounded mb-1 inline-block">${escapeHtml(slot.platform)}</span>
                        <h4 class="text-sm font-bold text-slate-800 truncate" title="${escapeHtml(asset.title)}">${escapeHtml(asset.title)}</h4>
+                       <div class="flex items-center gap-2 mt-1">
+                          <span class="text-[10px] text-slate-400"><i class="fa-solid ${slot.source === 'videoAsset' ? 'fa-clapperboard' : 'fa-folder'} mr-1"></i> ${slot.source === 'videoAsset' ? 'Central de Vídeos' : 'Biblioteca'}</span>
+                       </div>
                      </div>
-                     <div class="flex items-center gap-1 ml-2 shrink-0">
-                       <button data-action="add-to-calendar" data-id="${slot.id}" class="text-slate-300 hover:text-blue-500 w-7 h-7 flex items-center justify-center rounded-lg hover:bg-blue-50 transition-colors" title="Adicionar ao Calendário"><i class="fa-solid fa-calendar-plus text-xs"></i></button>
-                       <button data-action="unschedule" data-id="${slot.id}" class="text-slate-300 hover:text-red-500 w-7 h-7 flex items-center justify-center rounded-lg hover:bg-red-50 transition-colors" title="Desagendar"><i class="fa-solid fa-xmark"></i></button>
+                     <div class="flex items-center gap-1 shrink-0">
+                       <button data-action="unschedule" data-id="${slot.id}" class="w-9 h-9 flex items-center justify-center rounded-xl bg-slate-100 text-slate-400 hover:bg-red-50 hover:text-red-500 transition-all" title="Desvincular">
+                         <i class="fa-solid fa-link-slash text-xs"></i>
+                       </button>
                      </div>
                    </div>`
                 : `<div class="flex justify-between items-center">
-                     <div class="text-xs text-slate-400 italic">Horário disponível (${escapeHtml(slot.platform)})</div>
-                     <button data-action="delete-slot" data-id="${slot.id}" class="text-slate-300 hover:text-red-500 p-1"><i class="fa-solid fa-trash"></i></button>
+                     <div class="text-xs text-slate-400 font-medium">Livre para conteúdo</div>
+                     <div class="flex gap-2">
+                       <button data-action="attach-content" data-id="${slot.id}" class="bg-blue-600 text-white text-[10px] font-black px-3 py-1.5 rounded-lg hover:bg-blue-700 shadow-sm transition-all active:scale-95">
+                         <i class="fa-solid fa-paperclip mr-1"></i> ANEXAR
+                       </button>
+                       <button data-action="delete-slot" data-id="${slot.id}" class="text-slate-300 hover:text-red-500 p-1 transition-colors"><i class="fa-solid fa-trash-can text-xs"></i></button>
+                     </div>
                    </div>`}
             </div>
           </div>`;
-        }).join('') + `<button data-action="add-slot" data-date="${selectedDate}" class="w-full border-2 border-dashed border-slate-200 text-slate-400 hover:border-blue-400 hover:text-blue-500 hover:bg-blue-50/50 rounded-2xl p-3 text-center text-sm font-bold transition-colors">+ Novo Horário</button>`;
+        }).join('') + `<button data-action="add-slot" data-date="${selectedDate}" class="w-full border-2 border-dashed border-slate-200 text-slate-400 hover:border-blue-400 hover:text-blue-500 hover:bg-blue-50/50 rounded-3xl p-4 text-center text-sm font-bold transition-all">+ Novo Horário Operacional</button>`;
 
-    // Ready assets not yet scheduled or posted
-    const scheduledIds = new Set(this.state.routine.map(r => r.assetId).filter(Boolean));
-    const postedIds = new Set(this.state.history.map(h => h.assetId).filter(Boolean));
-    const readyAssets = [
+    // Available content for the side panel
+    const scheduledAssetIds = new Set(this.state.routine.map(r => r.assetId).filter(Boolean));
+    const readyContent = [
+      ...this.state.videoAssets.filter(v => v.status === 'pronto' || v.status === 'reutilizar'),
       ...this.state.library,
       ...this.state.clips.filter(c => c.status === 'approved' || c.status === 'aprovado'),
-    ].filter(a => !scheduledIds.has(a.id) && !postedIds.has(a.id));
+    ].filter(a => !scheduledAssetIds.has(a.id));
 
-    const readyHTML = readyAssets.length === 0
-      ? `<div class="text-xs text-slate-400 text-center py-6">Nenhum conteúdo pendente. Aprove clipes ou adicione à biblioteca primeiro.</div>`
-      : readyAssets.map(item => `
-          <div class="bg-white p-3 rounded-xl shadow-sm border border-slate-200 mb-2 hover:border-blue-300 transition-colors">
-            <div class="text-[9px] font-bold text-slate-400 uppercase mb-1">${escapeHtml(item.type || 'Clipe Aprovado')}</div>
-            <h4 class="text-sm font-bold text-slate-800 mb-3 leading-tight line-clamp-2">${escapeHtml(item.title)}</h4>
-            <button data-action="schedule-asset" data-id="${item.id}" data-source="${item.type ? 'library' : 'clip'}" class="w-full bg-slate-50 hover:bg-blue-50 text-slate-600 hover:text-blue-600 border border-slate-200 hover:border-blue-200 text-xs py-2 rounded-lg font-bold transition-colors"><i class="fa-solid fa-calendar-plus mr-1"></i> Agendar</button>
+    const readyHTML = readyContent.length === 0
+      ? `<div class="text-xs text-slate-400 text-center py-10 px-4 bg-white/50 rounded-2xl border border-dashed border-slate-200">
+          <i class="fa-solid fa-inbox text-2xl mb-2 opacity-20"></i>
+          <p>Nenhum conteúdo pronto disponível para agendamento.</p>
+        </div>`
+      : readyContent.map(item => {
+          const isVideo = !!item.thumbnailUrl;
+          return `
+          <div class="bg-white p-3 rounded-2xl shadow-sm border border-slate-200 mb-3 hover:border-blue-400 transition-all group">
+            <div class="flex gap-3">
+              ${isVideo ? `<img src="${item.thumbnailUrl}" class="w-12 h-12 rounded-lg object-cover bg-slate-100" />` : `<div class="w-12 h-12 rounded-lg bg-slate-100 flex items-center justify-center text-slate-400"><i class="fa-solid fa-file-lines"></i></div>`}
+              <div class="flex-1 min-w-0">
+                <div class="text-[9px] font-black text-slate-400 uppercase tracking-tighter mb-0.5">${escapeHtml(item.type || (isVideo ? 'Vídeo' : 'Clipe'))}</div>
+                <h4 class="text-xs font-bold text-slate-800 leading-tight line-clamp-2">${escapeHtml(item.title || item.name)}</h4>
+              </div>
+            </div>
+            <button data-action="schedule-asset" data-id="${item.id}" data-source="${item.type ? 'library' : (isVideo ? 'videoAsset' : 'clip')}" class="w-full mt-3 bg-slate-50 group-hover:bg-blue-600 group-hover:text-white text-slate-500 border border-slate-100 group-hover:border-blue-600 text-[10px] font-black py-2 rounded-xl transition-all uppercase tracking-widest">
+              Agendar
+            </button>
           </div>
-        `).join('');
+        `;}).join('');
 
     return `
-      <div class="flex justify-between items-center mb-6">
+      <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
         <div>
-          <h2 class="text-2xl font-bold text-slate-800">Pipeline de Conteúdo</h2>
-          <p class="text-sm text-slate-500 mt-1">Agende e gerencie seu calendário de publicações.</p>
+          <h2 class="text-3xl font-bold text-slate-900 tracking-tight">Agenda Operacional</h2>
+          <p class="text-sm text-slate-500 mt-1">Gerencie os slots de publicação e o fluxo de distribuição.</p>
         </div>
-        <button data-action="export-calendar" class="flex items-center gap-1.5 bg-blue-50 hover:bg-blue-100 text-blue-600 border border-blue-200 text-xs font-bold px-3 py-2 rounded-xl transition-colors">
-          <i class="fa-solid fa-calendar-arrow-up"></i> <span class="hidden sm:inline">Exportar Calendário</span>
-        </button>
+        <div class="flex gap-2">
+          <button data-action="export-calendar" class="bg-white text-slate-700 border border-slate-200 text-xs font-bold px-4 py-2.5 rounded-2xl shadow-sm hover:bg-slate-50 transition-all flex items-center gap-2">
+            <i class="fa-solid fa-file-export text-blue-500"></i> Exportar
+          </button>
+        </div>
       </div>
 
-      <div class="flex gap-2 overflow-x-auto hide-scrollbar pb-2 mb-6 snap-x">
+      <div class="flex gap-2 overflow-x-auto hide-scrollbar pb-4 mb-4 snap-x">
         ${calendarHTML}
       </div>
 
-      <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div class="flex gap-2 overflow-x-auto hide-scrollbar pb-6 mb-2">
+        ${filtersHTML}
+      </div>
+
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
         <div class="lg:col-span-2">
-          <h3 class="font-bold text-slate-700 mb-4">Agenda para ${formatDate(selectedDate)}</h3>
-          <div class="bg-slate-50 p-4 rounded-3xl border border-slate-200">
+          <div class="flex items-center justify-between mb-4">
+             <h3 class="font-bold text-slate-800 flex items-center gap-2"><i class="fa-solid fa-clock-rotate-left text-blue-500"></i> Slots para ${formatDate(selectedDate)}</h3>
+             <span class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">${slots.length} HORÁRIOS</span>
+          </div>
+          <div class="bg-slate-50/50 p-2 md:p-6 rounded-[2rem] border border-slate-200/60">
             ${slotsHTML}
           </div>
         </div>
 
-        <div>
-          <div class="bg-slate-100 rounded-3xl p-4 border border-slate-200 h-full max-h-[600px] flex flex-col">
-            <h3 class="font-bold text-slate-700 mb-4 flex items-center gap-2"><i class="fa-solid fa-box-open text-blue-500"></i> Conteúdo Pronto</h3>
-            <div class="overflow-y-auto flex-1 pr-2 hide-scrollbar">
+        <div class="space-y-6">
+          <div class="bg-slate-900 rounded-[2rem] p-6 text-white shadow-xl relative overflow-hidden">
+            <i class="fa-solid fa-rocket absolute -right-4 -bottom-4 text-7xl opacity-10 -rotate-12"></i>
+            <h3 class="font-bold text-lg mb-1 flex items-center gap-2">Ready to Post</h3>
+            <p class="text-[10px] text-slate-400 uppercase tracking-widest mb-6">Conteúdo finalizado</p>
+            <div class="overflow-y-auto max-h-[500px] pr-1 hide-scrollbar">
               ${readyHTML}
             </div>
           </div>
@@ -1264,6 +1328,15 @@ const App = {
         case 'toggle-notifications': this.toggleNotifications(); break;
         case 'toggle-calendar': this.toggleCalendarAutoAdd(); break;
         case 'copy-sync-id': this.copySyncId(); break;
+        case 'filter-network': this.setNetworkFilter(btn.dataset.network); break;
+        case 'attach-content': this.openAttachModal(id); break;
+        case 'open-cloud-modal': this.openCloudModal(); break;
+        case 'connect-cloud': this.connectCloud(btn.dataset.provider); break;
+        case 'disconnect-cloud': this.disconnectCloud(btn.dataset.provider); break;
+        case 'preview-video': this.previewVideo(id); break;
+        case 'edit-video': this.editVideo(id); break;
+        case 'attach-to-agenda': this.openScheduleModal(id, 'videoAsset'); break;
+        case 'add-video-manual': this.addVideoManual(); break;
       }
     });
 
@@ -1278,7 +1351,69 @@ const App = {
   findAsset(assetId, source) {
     if (!assetId) return null;
     if (source === 'library') return this.state.library.find(a => a.id === assetId);
+    if (source === 'videoAsset') return this.state.videoAssets.find(v => v.id === assetId);
     return this.state.clips.find(c => c.id === assetId);
+  },
+
+  setNetworkFilter(network) {
+    this.state.activeNetworkFilter = network;
+    saveState(this.state);
+    this.render();
+  },
+
+  openAttachModal(slotId) {
+    const slot = this.state.routine.find(r => r.id === slotId);
+    if (!slot) return;
+
+    const scheduledAssetIds = new Set(this.state.routine.map(r => r.assetId).filter(Boolean));
+    const readyContent = [
+      ...this.state.videoAssets.filter(v => v.status === 'pronto' || v.status === 'reutilizar'),
+      ...this.state.library,
+      ...this.state.clips.filter(c => c.status === 'approved' || c.status === 'aprovado'),
+    ].filter(a => !scheduledAssetIds.has(a.id));
+
+    const body = `
+      <div class="space-y-4">
+        <p class="text-xs font-bold text-slate-400 uppercase tracking-widest">Selecione o conteúdo para o slot das ${slot.time}</p>
+        <div class="max-h-64 overflow-y-auto space-y-2 pr-1 hide-scrollbar">
+          ${readyContent.length === 0
+            ? '<p class="text-center py-4 text-slate-400 text-sm">Nenhum conteúdo disponível.</p>'
+            : readyContent.map(item => `
+              <button data-action="confirm-attach" data-slot-id="${slotId}" data-asset-id="${item.id}" data-source="${item.type ? 'library' : (item.thumbnailUrl ? 'videoAsset' : 'clip')}"
+                class="w-full text-left p-3 rounded-xl border border-slate-200 hover:border-blue-500 hover:bg-blue-50 transition-all flex items-center gap-3 group">
+                ${item.thumbnailUrl ? `<img src="${item.thumbnailUrl}" class="w-10 h-10 rounded-lg object-cover" />` : `<div class="w-10 h-10 rounded-lg bg-slate-100 flex items-center justify-center text-slate-400"><i class="fa-solid fa-file-lines"></i></div>`}
+                <div class="flex-1 min-w-0">
+                  <div class="text-[8px] font-black text-slate-400 uppercase">${escapeHtml(item.type || (item.thumbnailUrl ? 'Vídeo' : 'Clipe'))}</div>
+                  <div class="text-xs font-bold text-slate-800 truncate">${escapeHtml(item.title || item.name)}</div>
+                </div>
+                <i class="fa-solid fa-chevron-right text-slate-300 group-hover:text-blue-500 text-[10px]"></i>
+              </button>
+            `).join('')}
+        </div>
+      </div>
+    `;
+
+    this.openModal('Anexar Conteúdo', body, '');
+
+    // Bind the inner buttons manually for this modal
+    document.getElementById('modal-body').querySelectorAll('[data-action="confirm-attach"]').forEach(btn => {
+      btn.onclick = () => {
+        const { slotId, assetId, source } = btn.dataset;
+        this.attachToSlot(slotId, assetId, source);
+        this.closeModal();
+      };
+    });
+  },
+
+  attachToSlot(slotId, assetId, source) {
+    const slot = this.state.routine.find(r => r.id === slotId);
+    if (slot) {
+      slot.assetId = assetId;
+      slot.source = source;
+      saveState(this.state);
+      this.render();
+      this.showToast('Conteúdo anexado ao slot!', 'success');
+    }
   },
 
   editConfig() {
@@ -1308,6 +1443,175 @@ const App = {
     this.ensureTodaySlots();
     this.changeView('dashboard');
     this.showToast('Configurações salvas!', 'success');
+  },
+
+  // ─── Video Manager Logic ─────────────────────────────
+  openCloudModal() {
+    const body = VideoManagerUI.renderCloudModal(this.state);
+    this.openModal('Conexões em Nuvem', body, '');
+  },
+
+  async connectCloud(provider) {
+    try {
+      const connector = getConnector(provider);
+      if (!connector) return;
+
+      this.showToast(`Conectando ao ${provider}...`, 'info');
+      const success = await connector.connect();
+
+      if (success) {
+        if (!this.state.cloudConnections) this.state.cloudConnections = [];
+        this.state.cloudConnections.push({
+          provider,
+          accountLabel: 'Usuário Clipper',
+          connectedAt: Date.now()
+        });
+
+        // Mock sync: add some videos
+        const files = await connector.listFiles('f2');
+        files.forEach(f => {
+          if (!this.state.videoAssets.some(v => v.id === f.id)) {
+            this.state.videoAssets.push({
+              id: f.id,
+              name: f.name,
+              thumbnailUrl: f.thumbnail,
+              duration: f.duration,
+              status: 'novo',
+              sourceProvider: provider,
+              sourceFolder: f.folder,
+              createdAt: Date.now()
+            });
+          }
+        });
+
+        saveState(this.state);
+        this.render();
+        this.openCloudModal(); // Refresh modal
+        this.showToast(`${provider} conectado com sucesso!`, 'success');
+      }
+    } catch (err) {
+      this.showToast(`Erro ao conectar: ${err.message}`, 'error');
+    }
+  },
+
+  disconnectCloud(provider) {
+    this.state.cloudConnections = this.state.cloudConnections.filter(c => c.provider !== provider);
+    saveState(this.state);
+    this.render();
+    this.openCloudModal();
+    this.showToast(`${provider} desconectado.`, 'info');
+  },
+
+  previewVideo(id) {
+    const video = this.state.videoAssets.find(v => v.id === id);
+    if (!video) return;
+
+    const body = `
+      <div class="aspect-video bg-black rounded-2xl overflow-hidden flex items-center justify-center relative group">
+        <img src="${video.thumbnailUrl}" class="w-full h-full object-contain opacity-50" />
+        <div class="absolute inset-0 flex items-center justify-center">
+           <i class="fa-solid fa-play text-6xl text-white/80"></i>
+        </div>
+        <div class="absolute bottom-4 left-4 right-4 bg-black/60 backdrop-blur-md p-4 rounded-xl text-white">
+          <div class="text-xs font-black uppercase tracking-widest text-blue-400 mb-1">Visualização</div>
+          <div class="font-bold truncate">${escapeHtml(video.name)}</div>
+        </div>
+      </div>
+      <div class="mt-4 grid grid-cols-2 gap-3">
+        <div class="bg-slate-50 p-3 rounded-xl border border-slate-100">
+           <div class="text-[9px] font-black text-slate-400 uppercase">Duração</div>
+           <div class="font-bold text-slate-800">${video.duration}</div>
+        </div>
+        <div class="bg-slate-50 p-3 rounded-xl border border-slate-100">
+           <div class="text-[9px] font-black text-slate-400 uppercase">Origem</div>
+           <div class="font-bold text-slate-800">${video.sourceProvider}</div>
+        </div>
+      </div>
+    `;
+
+    this.openModal('Preview', body, `<button class="w-full bg-slate-900 text-white font-bold py-3.5 rounded-xl shadow-md" onclick="ClipperApp.closeModal()">Fechar</button>`);
+  },
+
+  editVideo(id) {
+    const video = this.state.videoAssets.find(v => v.id === id);
+    if (!video) return;
+
+    const body = `
+      <div class="space-y-4">
+        <div>
+          <label class="block text-xs font-bold text-slate-400 mb-1 uppercase tracking-wider">Nome do Arquivo</label>
+          <input type="text" id="edit-video-name" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm outline-none" value="${escapeHtml(video.name)}">
+        </div>
+        <div>
+          <label class="block text-xs font-bold text-slate-400 mb-1 uppercase tracking-wider">Status do Fluxo</label>
+          <select id="edit-video-status" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm outline-none">
+            ${['novo', 'pronto', 'agendado', 'publicado', 'reutilizar', 'arquivado'].map(s => `<option value="${s}" ${video.status === s ? 'selected' : ''}>${s.charAt(0).toUpperCase() + s.slice(1)}</option>`).join('')}
+          </select>
+        </div>
+      </div>
+    `;
+
+    this.openModal('Editar Vídeo', body, `<button id="btn-update-video" class="w-full bg-blue-600 text-white font-bold py-3.5 rounded-xl shadow-md">Salvar Alterações</button>`);
+
+    document.getElementById('btn-update-video')?.addEventListener('click', () => {
+      video.name = document.getElementById('edit-video-name').value;
+      video.status = document.getElementById('edit-video-status').value;
+      saveState(this.state);
+      this.closeModal();
+      this.render();
+      this.showToast('Vídeo atualizado!', 'success');
+    });
+  },
+
+  addVideoManual() {
+    const body = `
+      <div class="space-y-4">
+        <div>
+          <label class="block text-xs font-bold text-slate-400 mb-1 uppercase tracking-wider">Nome do Vídeo</label>
+          <input type="text" id="new-video-name" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm outline-none" placeholder="Ex: Meu Vídeo Incrível">
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-bold text-slate-400 mb-1 uppercase tracking-wider">Duração (mm:ss)</label>
+            <input type="text" id="new-video-dur" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm outline-none" placeholder="00:30">
+          </div>
+          <div>
+            <label class="block text-xs font-bold text-slate-400 mb-1 uppercase tracking-wider">Status</label>
+            <select id="new-video-status" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm outline-none">
+              <option value="novo">Novo</option>
+              <option value="pronto">Pronto</option>
+            </select>
+          </div>
+        </div>
+        <div>
+          <label class="block text-xs font-bold text-slate-400 mb-1 uppercase tracking-wider">URL da Thumbnail (Opcional)</label>
+          <input type="url" id="new-video-thumb" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm outline-none" placeholder="https://...">
+        </div>
+      </div>
+    `;
+
+    this.openModal('Importar Vídeo', body, `<button id="btn-save-new-video" class="w-full bg-slate-900 text-white font-bold py-3.5 rounded-xl shadow-md">Importar</button>`);
+
+    document.getElementById('btn-save-new-video')?.addEventListener('click', () => {
+      const name = document.getElementById('new-video-name').value;
+      if (!name) return this.showToast('Nome é obrigatório', 'error');
+
+      this.state.videoAssets.push({
+        id: generateId(),
+        name,
+        duration: document.getElementById('new-video-dur').value || '00:00',
+        status: document.getElementById('new-video-status').value,
+        thumbnailUrl: document.getElementById('new-video-thumb').value || 'https://via.placeholder.com/400x225?text=Video',
+        sourceProvider: 'Manual',
+        sourceFolder: 'Upload',
+        createdAt: Date.now()
+      });
+
+      saveState(this.state);
+      this.closeModal();
+      this.render();
+      this.showToast('Vídeo importado manualmente!', 'success');
+    });
   },
 
   resetData() {
@@ -1479,24 +1783,49 @@ const App = {
 
   openScheduleModal(assetId, source) {
     const platOptions = PLATFORMS.map(p => `<option value="${p}">${p}</option>`).join('');
+    const multiPlatOptions = PLATFORMS.map(p => `
+      <label class="flex items-center gap-3 p-3 bg-slate-50 rounded-xl border border-slate-200 cursor-pointer hover:bg-slate-100 transition-colors">
+        <input type="checkbox" name="sched-plats" value="${p}" class="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500">
+        <span class="text-xs font-bold text-slate-700">${p}</span>
+      </label>
+    `).join('');
+
     const defaultDate = this.state.filterDate || todayStr();
+    const asset = this.findAsset(assetId, source);
 
     const body = `
-      <div class="space-y-4">
+      <div class="space-y-5">
         <input type="hidden" id="sched-asset" value="${assetId}">
         <input type="hidden" id="sched-source" value="${source}">
 
-        <div><label class="block text-xs font-bold text-slate-400 mb-1">Data de Publicação</label>
-        <input type="date" id="sched-date" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-blue-500" value="${defaultDate}"></div>
+        <div class="flex items-center gap-3 p-4 bg-blue-50 rounded-2xl border border-blue-100">
+          ${asset?.thumbnailUrl ? `<img src="${asset.thumbnailUrl}" class="w-12 h-12 rounded-lg object-cover" />` : `<div class="w-12 h-12 rounded-lg bg-white flex items-center justify-center text-blue-500 shadow-sm"><i class="fa-solid fa-file-video"></i></div>`}
+          <div class="flex-1 min-w-0">
+             <div class="text-[9px] font-black text-blue-400 uppercase tracking-widest">Agendando Conteúdo</div>
+             <div class="text-sm font-bold text-slate-800 truncate">${escapeHtml(asset?.title || asset?.name || 'Item')}</div>
+          </div>
+        </div>
 
         <div class="grid grid-cols-2 gap-3">
-          <div><label class="block text-xs font-bold text-slate-400 mb-1">Horário</label>
-          <input type="time" id="sched-time" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm outline-none" value="12:00"></div>
-          <div><label class="block text-xs font-bold text-slate-400 mb-1">Plataforma</label>
-          <select id="sched-plat" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-3 text-sm outline-none">${platOptions}</select></div>
+          <div>
+            <label class="block text-[10px] font-black text-slate-400 mb-1.5 uppercase tracking-widest">Data</label>
+            <input type="date" id="sched-date" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-blue-500" value="${defaultDate}">
+          </div>
+          <div>
+            <label class="block text-[10px] font-black text-slate-400 mb-1.5 uppercase tracking-widest">Horário</label>
+            <input type="time" id="sched-time" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm outline-none" value="12:00">
+          </div>
+        </div>
+
+        <div>
+          <label class="block text-[10px] font-black text-slate-400 mb-2 uppercase tracking-widest">Redes Sociais (Multi-post)</label>
+          <div class="grid grid-cols-2 gap-2">
+            ${multiPlatOptions}
+          </div>
         </div>
       </div>`;
-    const footer = `<button id="btn-save-schedule" class="w-full bg-blue-600 text-white font-bold py-3.5 rounded-xl shadow-md">Confirmar Agendamento</button>`;
+
+    const footer = `<button id="btn-save-schedule" class="w-full bg-blue-600 text-white font-black py-4 rounded-2xl shadow-lg shadow-blue-600/20 active:scale-95 transition-all uppercase tracking-widest">Confirmar Agendamento</button>`;
     this.openModal('Agendar Conteúdo', body, footer);
     document.getElementById('btn-save-schedule')?.addEventListener('click', () => this.saveSchedule());
   },
@@ -1506,30 +1835,42 @@ const App = {
     const source = document.getElementById('sched-source')?.value;
     const date = document.getElementById('sched-date')?.value;
     const time = document.getElementById('sched-time')?.value;
-    const platform = document.getElementById('sched-plat')?.value;
+
+    const selectedPlats = Array.from(document.querySelectorAll('input[name="sched-plats"]:checked')).map(cb => cb.value);
 
     if (!date || !time) return this.showToast('Data e hora são obrigatórios.', 'error');
+    if (selectedPlats.length === 0) return this.showToast('Selecione pelo menos uma plataforma.', 'warning');
 
-    const slot = { id: generateId(), date, time, platform, assetId, source, isPosted: false };
-    this.state.routine.push(slot);
+    selectedPlats.forEach(platform => {
+      const slot = {
+        id: generateId(),
+        date,
+        time,
+        platform,
+        assetId,
+        source,
+        isPosted: false
+      };
+      this.state.routine.push(slot);
+
+      // Schedule local notification if enabled
+      if (this.state.config.notificationsEnabled && assetId) {
+        const asset = this.findAsset(assetId, source);
+        if (asset) NotificationManager.scheduleForSlot(slot, asset.title || asset.name);
+      }
+
+      // Auto-add to calendar if enabled
+      if (this.state.config.calendarAutoAdd && assetId) {
+        const asset = this.findAsset(assetId, source);
+        if (asset) CalendarManager.addEvent(slot, asset.title || asset.name);
+      }
+    });
 
     this.state.filterDate = date;
     saveState(this.state);
     this.closeModal();
     this.changeView('pipeline');
-    this.showToast('Conteúdo agendado!', 'success');
-
-    // Schedule local notification if enabled
-    if (this.state.config.notificationsEnabled && assetId) {
-      const asset = this.findAsset(assetId, source);
-      if (asset) NotificationManager.scheduleForSlot(slot, asset.title);
-    }
-
-    // Auto-add to calendar if enabled
-    if (this.state.config.calendarAutoAdd && assetId) {
-      const asset = this.findAsset(assetId, source);
-      if (asset) CalendarManager.addEvent(slot, asset.title);
-    }
+    this.showToast(`${selectedPlats.length} agendamentos criados!`, 'success');
   },
 
   addEmptySlot(date) {
