@@ -325,10 +325,11 @@ const App = {
 
     if (mobileNav) {
       const findView = (id) => this.views.find(v => v.id === id);
-      let mobileViewIds = ['dashboard', 'pipeline', 'library', 'clipper', 'gemini'];
+      // Incluindo 'videos' na navegação mobile principal
+      let mobileViewIds = ['dashboard', 'videos', 'pipeline', 'library', 'gemini'];
 
       if (this.isAdmin) {
-        mobileViewIds = ['dashboard', 'pipeline', 'clipper', 'gemini', 'admin'];
+        mobileViewIds = ['dashboard', 'videos', 'pipeline', 'gemini', 'admin'];
       }
 
       let mobileViews = mobileViewIds.map(id => findView(id)).filter(Boolean);
@@ -793,6 +794,7 @@ const App = {
                 <span class="text-[10px] font-bold px-2 py-0.5 rounded bg-slate-100 text-slate-600 border border-slate-200"><i class="fa-solid fa-bullhorn"></i> ${escapeHtml(h.platform || 'Geral')}</span>
                 <span class="text-[10px] font-medium text-slate-400"><i class="fa-regular fa-calendar-check mr-1"></i> ${formatDate(h.postedAt)}</span>
                 <span class="text-[10px] font-medium text-slate-400"><i class="fa-solid fa-folder-tree mr-1"></i> ${escapeHtml(h.category)}</span>
+                ${h.cloudMove ? `<span class="text-[10px] font-bold px-2 py-0.5 rounded ${h.cloudMove === 'Sucesso' ? 'bg-green-50 text-green-600 border-green-100' : 'bg-amber-50 text-amber-600 border-amber-100'} border ml-1"><i class="fa-solid fa-cloud-arrow-up mr-1"></i> Nuvem: ${h.cloudMove}</span>` : ''}
               </div>
               <h4 class="font-bold text-slate-800 text-sm md:text-base leading-tight">${escapeHtml(h.title)}</h4>
             </div>
@@ -1118,7 +1120,7 @@ const App = {
     // Drag-and-Drop Support for Pipeline
     this.setupDragAndDrop();
 
-    content.addEventListener('click', (e) => {
+    content.addEventListener('click', async (e) => {
       const btn = e.target.closest('[data-action]');
       if (!btn) return;
       const action = btn.dataset.action;
@@ -1156,6 +1158,13 @@ const App = {
         case 'edit-video': this.editVideo(id); break;
         case 'attach-to-agenda': this.openScheduleModal(id, 'videoAsset'); break;
         case 'add-video-manual': this.addVideoManual(); break;
+        case 'filter-videos':
+          this.state.videoFilter = btn.dataset.filter;
+          saveState(this.state);
+          this.render();
+          break;
+        case 'select-folder': this.selectCloudFolder(btn.dataset.provider, btn.dataset.type); break;
+        case 'video-options': this.showVideoOptions(id); break;
       }
     });
 
@@ -1170,10 +1179,18 @@ const App = {
   setupDragAndDrop() {
     if (this.state.currentView !== 'pipeline') return;
 
+    // Remove existing listeners to avoid duplication
+    const pipeline = document.getElementById('pipeline-view');
+    if (pipeline) {
+      const newPipeline = pipeline.cloneNode(true);
+      pipeline.parentNode.replaceChild(newPipeline, pipeline);
+    }
+
     const draggables = document.querySelectorAll('.draggable-item');
     const dropzones = document.querySelectorAll('[data-action="attach-content"]');
 
     draggables.forEach(el => {
+      el.setAttribute('draggable', 'true');
       el.addEventListener('dragstart', (e) => {
         const item = {
           id: el.dataset.id,
@@ -1189,20 +1206,20 @@ const App = {
     });
 
     dropzones.forEach(zone => {
-      const container = zone.closest('.bg-white');
+      const container = zone.closest('.bg-white') || zone;
 
       container.addEventListener('dragover', (e) => {
         e.preventDefault();
-        container.classList.add('border-blue-500', 'bg-blue-50/50');
+        container.classList.add('ring-2', 'ring-blue-500', 'bg-blue-50/50');
       });
 
       container.addEventListener('dragleave', () => {
-        container.classList.remove('border-blue-500', 'bg-blue-50/50');
+        container.classList.remove('ring-2', 'ring-blue-500', 'bg-blue-50/50');
       });
 
       container.addEventListener('drop', (e) => {
         e.preventDefault();
-        container.classList.remove('border-blue-500', 'bg-blue-50/50');
+        container.classList.remove('ring-2', 'ring-blue-500', 'bg-blue-50/50');
 
         try {
           const data = JSON.parse(e.dataTransfer.getData('application/json'));
@@ -1331,33 +1348,26 @@ const App = {
 
       if (success) {
         if (!this.state.cloudConnections) this.state.cloudConnections = [];
-        this.state.cloudConnections.push({
-          provider,
-          accountLabel: 'Usuário Clipper',
-          connectedAt: Date.now()
-        });
+        const existing = this.state.cloudConnections.find(c => c.provider === provider);
 
-        // Mock sync: add some videos
-        const files = await connector.listFiles('f2');
-        files.forEach(f => {
-          if (!this.state.videoAssets.some(v => v.id === f.id)) {
-            this.state.videoAssets.push({
-              id: f.id,
-              title: f.name,
-              thumbnailUrl: f.thumbnail,
-              duration: f.duration,
-              status: 'novo',
-              sourceProvider: provider,
-              sourceFolder: f.folder,
-              createdAt: Date.now()
-            });
-          }
-        });
+        if (!existing) {
+          this.state.cloudConnections.push({
+            provider,
+            accountLabel: 'Usuário Clipper',
+            connectedAt: Date.now(),
+            enabled: true,
+            inputFolderId: null,
+            postedFolderId: null
+          });
+        } else {
+          existing.enabled = true;
+          existing.connectedAt = Date.now();
+        }
 
         saveState(this.state);
         this.render();
         this.openCloudModal(); // Refresh modal
-        this.showToast(`${provider} conectado com sucesso!`, 'success');
+        this.showToast(`${provider} conectado! Configure as pastas.`, 'success');
       }
     } catch (err) {
       this.showToast(`Erro ao conectar: ${err.message}`, 'error');
@@ -1365,7 +1375,11 @@ const App = {
   },
 
   disconnectCloud(provider) {
-    this.state.cloudConnections = this.state.cloudConnections.filter(c => c.provider !== provider);
+    const conn = this.state.cloudConnections.find(c => c.provider === provider);
+    if (conn) {
+      conn.enabled = false;
+      // We keep folder IDs to make re-connection easier, but disable the flow
+    }
     saveState(this.state);
     this.render();
     this.openCloudModal();
@@ -1431,6 +1445,138 @@ const App = {
       this.render();
       this.showToast('Vídeo atualizado!', 'success');
     });
+  },
+
+  async selectCloudFolder(provider, type) {
+    const connector = getConnector(provider);
+    if (!connector) return;
+
+    this.showToast(`Buscando pastas no ${provider}...`, 'info');
+    try {
+      const folders = await connector.getFolders();
+
+      const body = `
+        <div class="space-y-4">
+          <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest text-center">Selecione a pasta de ${type === 'input' ? 'Entrada (Brutos)' : 'Postados (Arquivamento)'}</p>
+          <div class="max-h-64 overflow-y-auto space-y-2 pr-1 hide-scrollbar">
+            ${folders.length === 0
+              ? '<p class="text-center py-8 text-slate-400 text-sm italic">Nenhuma pasta encontrada.</p>'
+              : folders.map(f => `
+                <button data-action="confirm-folder" data-id="${f.id}" data-name="${f.name}"
+                  class="w-full text-left p-4 rounded-2xl border border-slate-200 hover:border-blue-500 hover:bg-blue-50 transition-all flex items-center justify-between group bg-white shadow-sm">
+                  <div class="flex items-center gap-3">
+                    <div class="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center text-slate-400 group-hover:bg-blue-100 group-hover:text-blue-500 transition-colors">
+                       <i class="fa-solid fa-folder"></i>
+                    </div>
+                    <span class="text-sm font-bold text-slate-700">${escapeHtml(f.name)}</span>
+                  </div>
+                  <i class="fa-solid fa-chevron-right text-slate-300 group-hover:text-blue-500 text-[10px]"></i>
+                </button>
+              `).join('')}
+          </div>
+        </div>
+      `;
+
+      this.openModal('Configurar Pasta', body, '');
+
+      document.getElementById('modal-body').querySelectorAll('[data-action="confirm-folder"]').forEach(btn => {
+        btn.onclick = async () => {
+          const { id, name } = btn.dataset;
+          const conn = this.state.cloudConnections.find(c => c.provider === provider);
+          if (conn) {
+            if (type === 'input') {
+              conn.inputFolderId = id;
+              conn.inputFolderName = name;
+
+              // Trigger initial sync for the selected folder
+              this.showToast(`Sincronizando ${name}...`, 'info');
+              const files = await connector.listFiles(id);
+              files.forEach(f => {
+                if (!this.state.videoAssets.some(v => v.id === f.id)) {
+                  this.state.videoAssets.push({
+                    id: f.id,
+                    title: f.name || f.title,
+                    thumbnailUrl: f.thumbnail || f.thumbnailUrl,
+                    duration: f.duration || '00:00',
+                    status: 'novo',
+                    sourceProvider: provider,
+                    sourceFolder: name,
+                    createdAt: Date.now()
+                  });
+                }
+              });
+            } else {
+              conn.postedFolderId = id;
+              conn.postedFolderName = name;
+            }
+            saveState(this.state);
+            this.openCloudModal();
+            this.showToast('Configuração salva!', 'success');
+            this.render(); // Update Video Manager view if visible
+          }
+        };
+      });
+    } catch (err) {
+      this.showToast('Erro ao listar pastas.', 'error');
+    }
+  },
+
+  showVideoOptions(id) {
+    const video = this.state.videoAssets.find(v => v.id === id);
+    if (!video) return;
+
+    const body = `
+      <div class="grid grid-cols-1 gap-2">
+        <button data-action="preview-video" data-id="${id}" class="w-full text-left p-4 rounded-xl hover:bg-slate-50 flex items-center gap-3 transition-colors">
+          <i class="fa-solid fa-play text-blue-500 w-5"></i>
+          <span class="text-sm font-bold text-slate-700">Visualizar</span>
+        </button>
+        <button data-action="edit-video" data-id="${id}" class="w-full text-left p-4 rounded-xl hover:bg-slate-50 flex items-center gap-3 transition-colors">
+          <i class="fa-solid fa-pen text-amber-500 w-5"></i>
+          <span class="text-sm font-bold text-slate-700">Editar Detalhes</span>
+        </button>
+        <button data-action="attach-to-agenda" data-id="${id}" class="w-full text-left p-4 rounded-xl hover:bg-slate-50 flex items-center gap-3 transition-colors">
+          <i class="fa-solid fa-calendar-plus text-purple-500 w-5"></i>
+          <span class="text-sm font-bold text-slate-700">Agendar Postagem</span>
+        </button>
+        <button data-action="mark-ready" data-id="${id}" class="w-full text-left p-4 rounded-xl hover:bg-slate-50 flex items-center gap-3 transition-colors">
+          <i class="fa-solid fa-check-circle text-green-500 w-5"></i>
+          <span class="text-sm font-bold text-slate-700">Marcar como Pronto</span>
+        </button>
+        <div class="border-t border-slate-100 my-1"></div>
+        <button data-action="delete-video" data-id="${id}" class="w-full text-left p-4 rounded-xl hover:bg-red-50 flex items-center gap-3 transition-colors text-red-500">
+          <i class="fa-solid fa-trash w-5"></i>
+          <span class="text-sm font-bold">Excluir do App</span>
+        </button>
+      </div>
+    `;
+
+    this.openModal('Opções do Vídeo', body, '');
+
+    // Bind modal actions
+    const modalBody = document.getElementById('modal-body');
+    modalBody.addEventListener('click', (e) => {
+      const btn = e.target.closest('[data-action]');
+      if (!btn) return;
+      this.closeModal();
+      const action = btn.dataset.action;
+      if (action === 'preview-video') this.previewVideo(id);
+      if (action === 'edit-video') this.editVideo(id);
+      if (action === 'attach-to-agenda') this.openScheduleModal(id, 'videoAsset');
+      if (action === 'mark-ready') {
+        video.status = 'pronto';
+        saveState(this.state);
+        this.render();
+        this.showToast('Vídeo marcado como pronto!', 'success');
+      }
+      if (action === 'delete-video') {
+        if (confirm('Remover vídeo da lista? (Não apagará na nuvem)')) {
+          this.state.videoAssets = this.state.videoAssets.filter(v => v.id !== id);
+          saveState(this.state);
+          this.render();
+        }
+      }
+    }, { once: true });
   },
 
   addVideoManual() {
@@ -1770,48 +1916,83 @@ const App = {
   },
 
   // ─── Posting / History Actions ──────────────────────
-  postScheduledAsset(slotId) {
+  async postScheduledAsset(slotId) {
     const slot = this.state.routine.find(r => r.id === slotId);
     if (!slot || !slot.assetId) return;
 
     const asset = this.findAsset(slot.assetId, slot.source);
     if (!asset) return;
 
-    // 1. Open social media deep link
-    const url = asset.link || getSocialDeepLink(slot.platform);
-    window.open(url, '_blank');
+    // 1. Get Social Link
+    const socialUrl = asset.link || getSocialDeepLink(slot.platform);
 
-    // 2. Ask user if it was posted to trigger cloud move logic
+    // 2. Prepare Modal Content
     const body = `
-      <div class="text-center py-4">
-        <div class="w-16 h-16 bg-green-100 text-green-600 rounded-full flex items-center justify-center mx-auto mb-4 text-2xl">
-          <i class="fa-solid fa-cloud-arrow-up"></i>
+      <div class="space-y-6">
+        <div class="flex items-center gap-4 p-4 bg-slate-50 rounded-2xl border border-slate-200">
+           ${asset.thumbnailUrl ? `<img src="${asset.thumbnailUrl}" class="w-16 h-16 rounded-xl object-cover shadow-sm" />` : `<div class="w-16 h-16 rounded-xl bg-white flex items-center justify-center text-slate-400 border border-slate-100"><i class="fa-solid fa-file-video text-2xl"></i></div>`}
+           <div class="flex-1 min-w-0">
+              <div class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">${escapeHtml(slot.platform)}</div>
+              <div class="font-bold text-slate-800 truncate">${escapeHtml(asset.title)}</div>
+           </div>
         </div>
-        <h3 class="font-bold text-slate-800 text-lg mb-2">Confirmar Postagem?</h3>
-        <p class="text-sm text-slate-500 px-4">Se o arquivo estiver em uma pasta sincronizada (Google Drive/OneDrive), o Clipper irá movê-lo automaticamente para a pasta de "Postados".</p>
+
+        <div class="grid grid-cols-1 gap-3">
+          <a href="${socialUrl}" target="_blank" class="flex items-center justify-center gap-3 bg-slate-900 text-white font-bold py-4 rounded-2xl shadow-lg hover:bg-black transition-all active:scale-95">
+            <i class="fa-solid fa-external-link-alt"></i> Abrir ${slot.platform}
+          </a>
+
+          <button id="btn-copy-caption" class="flex items-center justify-between px-6 py-4 bg-white border border-slate-200 rounded-2xl hover:bg-slate-50 transition-all group">
+            <div class="flex items-center gap-3">
+              <i class="fa-solid fa-quote-left text-blue-500"></i>
+              <span class="text-sm font-bold text-slate-700">Copiar Legenda</span>
+            </div>
+            <i class="fa-solid fa-copy text-slate-300 group-hover:text-blue-500"></i>
+          </button>
+        </div>
+
+        <div class="pt-4 border-t border-slate-100">
+          <p class="text-[10px] text-slate-400 font-bold uppercase tracking-widest text-center mb-4">Após publicar na rede social:</p>
+          <button id="btn-confirm-post" class="w-full bg-green-600 text-white font-black py-4 rounded-2xl shadow-lg shadow-green-600/20 active:scale-95 transition-all uppercase tracking-widest">
+            <i class="fa-solid fa-check-circle mr-2"></i> Confirmar como Postado
+          </button>
+        </div>
       </div>
     `;
 
-    const footer = `
-      <div class="grid grid-cols-2 gap-3 w-full">
-        <button id="btn-confirm-post" class="bg-green-600 text-white font-bold py-3.5 rounded-xl shadow-md">Sim, Postado!</button>
-        <button id="btn-cancel-post" class="bg-slate-100 text-slate-500 font-bold py-3.5 rounded-xl" onclick="ClipperApp.closeModal()">Ainda não</button>
-      </div>
-    `;
+    this.openModal('Postagem Rápida', body, '');
 
-    this.openModal('Finalizar Postagem', body, footer);
+    // Bind local modal events
+    document.getElementById('btn-copy-caption')?.addEventListener('click', () => {
+      const caption = `${asset.title}\n\n#clipperos #contentcreator #${slot.platform.replace(' ', '').toLowerCase()}`;
+      navigator.clipboard.writeText(caption);
+      this.showToast('Legenda copiada!', 'success');
+    });
 
     document.getElementById('btn-confirm-post')?.addEventListener('click', async () => {
-      // Logic for cloud move
-      if (asset.sourceProvider && asset.sourceFolder) {
-        this.showToast('Movendo arquivo na nuvem...', 'info');
-        const connector = getConnector(asset.sourceProvider);
-        if (connector && typeof connector.moveFile === 'function') {
-          try {
-            const moved = await connector.moveFile(asset.id, asset.sourceFolder, 'posted_folder_id_placeholder');
-            if (moved) this.showToast('Arquivo movido para "Postados"!', 'success');
-          } catch (e) {
-            console.warn('Cloud move failed:', e);
+      this.closeModal();
+      this.showToast('Finalizando...', 'info');
+
+      // Cloud Move Logic
+      let moveStatus = 'Não aplicável';
+      if (asset.sourceProvider && asset.id) {
+        const conn = this.state.cloudConnections.find(c => c.provider === asset.sourceProvider);
+        if (conn && conn.enabled && conn.postedFolderId) {
+          const connector = getConnector(asset.sourceProvider);
+          if (connector) {
+            try {
+              const success = await connector.moveFile(asset.id, conn.postedFolderId);
+              moveStatus = success ? 'Sucesso' : 'Falha';
+              if (success) {
+                asset.status = 'publicado';
+                asset.sourceFolder = conn.postedFolderName || 'Postados';
+                this.showToast('Arquivo movido na nuvem!', 'success');
+              } else {
+                this.showToast('Falha ao mover arquivo na nuvem.', 'warning');
+              }
+            } catch (e) {
+              moveStatus = `Erro: ${e.message}`;
+            }
           }
         }
       }
@@ -1822,17 +2003,17 @@ const App = {
         assetId: asset.id,
         title: asset.title,
         platform: slot.platform,
-        category: asset.type || 'Clipe',
+        category: asset.type || 'Vídeo',
         postedAt: new Date().toISOString(),
-        performance: 'Pending',
-        link: asset.link || '',
+        performance: 'Pendente',
+        link: '',
+        cloudMove: moveStatus
       });
 
       slot.isPosted = true;
       NotificationManager.cancelForSlot(slotId);
 
       saveState(this.state);
-      this.closeModal();
       this.render();
       this.showToast('Publicado com sucesso! 🚀', 'success');
     });

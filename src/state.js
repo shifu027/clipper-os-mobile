@@ -23,7 +23,10 @@ export const DEFAULT_STATE = {
   // New Video Manager fields
   videoAssets: [],
   scheduledPosts: [],
-  cloudConnections: [],
+  cloudConnections: [
+    { provider: 'Google Drive', enabled: false, inputFolderId: '', postedFolderId: '', inputFolderName: 'Selecionar...', postedFolderName: 'Selecionar...' },
+    { provider: 'OneDrive', enabled: false, inputFolderId: '', postedFolderId: '', inputFolderName: 'Selecionar...', postedFolderName: 'Selecionar...' }
+  ],
   activeNetworkFilter: 'Todas',
 };
 

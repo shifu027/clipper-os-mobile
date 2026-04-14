@@ -28,14 +28,11 @@ class CloudConnector {
       });
 
       if (error) throw error;
-      if (!data.url) throw new Error('Failed to get auth URL');
-
-      // 2. Open URL for user (Capacitor Browser would be used here in production)
-      window.open(data.url, '_blank');
-
-      // For mobile development, we expect the redirect to a deep-link
-      // which will then notify the app. Here we simulate polling or completion.
-      return true;
+      if (data && data.url) {
+        window.open(data.url, '_blank');
+        return true;
+      }
+      return false;
     } catch (err) {
       console.error(`[Cloud] Connection error:`, err);
       throw err;
@@ -43,8 +40,6 @@ class CloudConnector {
   }
 
   async listFiles(folderId) {
-    console.log(`[Cloud] Listing files for ${this.provider} in folder ${folderId}...`);
-
     if (!SyncManager.client) return [];
 
     try {
@@ -54,14 +49,13 @@ class CloudConnector {
 
       if (error) throw error;
 
-      // Normalize response from proxy
       return (data.files || []).map(f => ({
         id: f.id,
-        title: f.name,
-        thumbnailUrl: f.thumbnail,
+        title: f.name || f.title,
+        thumbnailUrl: f.thumbnail || f.thumbnailUrl,
         duration: f.duration || '00:00',
-        folder: f.folderName || 'Root',
-        provider: this.provider,
+        sourceFolder: f.folderName || 'Root',
+        sourceProvider: this.provider,
         metadata: f.metadata || {}
       }));
     } catch (err) {
@@ -80,16 +74,17 @@ class CloudConnector {
       if (error) throw error;
       return data.folders || [];
     } catch (err) {
+      console.error(`[Cloud] getFolders error:`, err);
       return [];
     }
   }
 
-  async moveFile(fileId, fromFolderId, toFolderId) {
+  async moveFile(fileId, toFolderId) {
     if (!SyncManager.client) throw new Error('Supabase client not initialized');
 
     try {
       const { data, error } = await SyncManager.client.functions.invoke('cloud-proxy', {
-        body: { action: 'move_file', provider: this.provider, fileId, fromFolderId, toFolderId }
+        body: { action: 'move_file', provider: this.provider, fileId, newFolderId: toFolderId }
       });
       if (error) throw error;
       return data.success || false;
