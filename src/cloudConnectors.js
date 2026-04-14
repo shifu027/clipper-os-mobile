@@ -83,6 +83,21 @@ class CloudConnector {
       return [];
     }
   }
+
+  async moveFile(fileId, fromFolderId, toFolderId) {
+    if (!SyncManager.client) throw new Error('Supabase client not initialized');
+
+    try {
+      const { data, error } = await SyncManager.client.functions.invoke('cloud-proxy', {
+        body: { action: 'move_file', provider: this.provider, fileId, fromFolderId, toFolderId }
+      });
+      if (error) throw error;
+      return data.success || false;
+    } catch (err) {
+      console.error(`[Cloud] moveFile error:`, err);
+      return false;
+    }
+  }
 }
 
 export const GoogleDriveConnector = new CloudConnector(PROVIDERS.GOOGLE_DRIVE);

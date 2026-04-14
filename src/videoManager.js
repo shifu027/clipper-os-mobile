@@ -133,16 +133,23 @@ export const VideoManagerUI = {
         </div>
 
         ${connections.length > 0 ? `
-          <div class="pt-6 border-t border-slate-200">
-            <label class="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-3">Pasta de Sincronização</label>
-            <select id="cloud-folder-select" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-blue-500">
-              <option value="">Selecione uma pasta...</option>
-              <option value="f1">Bruto (Drafts)</option>
-              <option value="f2" selected>Finalizados (Ready)</option>
-              <option value="f3">Recursos (Assets)</option>
-            </select>
-            <p class="text-[10px] text-slate-400 mt-2 text-center">O Clipper OS sincronizará novos vídeos desta pasta automaticamente.</p>
+          <div class="pt-6 border-t border-slate-200 grid grid-cols-2 gap-4">
+            <div>
+              <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 ml-1">Pasta de Entrada</label>
+              <select id="cloud-input-folder" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-blue-500">
+                <option value="f1">Finalizados (Ready)</option>
+                <option value="f2" selected>Em Edição</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 ml-1">Pasta de Postados</label>
+              <select id="cloud-posted-folder" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-blue-500">
+                <option value="p1" selected>Publicados</option>
+                <option value="p2">Arquivados</option>
+              </select>
+            </div>
           </div>
+          <p class="text-[9px] text-slate-400 mt-2 text-center uppercase tracking-widest font-bold">O Clipper OS sincronizará novos vídeos e os moverá após a postagem.</p>
         ` : ''}
       </div>
     `;

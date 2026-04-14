@@ -1,3 +1,6 @@
+export const PLATFORMS = ['TikTok', 'Instagram Reels', 'YouTube Shorts', 'LinkedIn', 'Facebook', 'X / Twitter'];
+export const TAGS = ['viral', 'vendas', 'engajamento', 'atemporal', 'tutorial', 'reutilizável', 'tendência'];
+
 export function generateId() {
   return Date.now().toString(36) + Math.random().toString(36).substring(2);
 }
@@ -28,4 +31,16 @@ export function csvEscape(val) {
     return '"' + str.replace(/"/g, '""') + '"';
   }
   return str;
+}
+
+export function getSocialDeepLink(platform) {
+  const links = {
+    'TikTok': 'https://www.tiktok.com/upload',
+    'Instagram Reels': 'https://www.instagram.com/reels/create/',
+    'YouTube Shorts': 'https://studio.youtube.com/',
+    'LinkedIn': 'https://www.linkedin.com/feed/',
+    'Facebook': 'https://www.facebook.com/reels/create/',
+    'X / Twitter': 'https://x.com/compose/post'
+  };
+  return links[platform] || 'https://google.com';
 }

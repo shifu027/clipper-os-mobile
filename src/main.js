@@ -7,7 +7,7 @@ import { CalendarManager } from './calendar.js';
 import { loadState, saveState, migrateState, STORAGE_KEY, generateId } from './state.js';
 import { VideoManagerUI } from './videoManager.js';
 import { PROVIDERS, getConnector } from './cloudConnectors.js';
-import { escapeHtml, formatDate, todayStr, csvEscape } from './utils.js';
+import { escapeHtml, formatDate, todayStr, csvEscape, PLATFORMS, TAGS, getSocialDeepLink } from './utils.js';
 
 /**
  * Clipper OS — Content Management Studio
@@ -154,8 +154,6 @@ function initBackground() {
 }
 
 // ─── App Controller ─────────────────────────────────────
-const PLATFORMS = ['TikTok', 'Instagram Reels', 'YouTube Shorts', 'LinkedIn', 'Facebook', 'X / Twitter'];
-const TAGS = ['viral', 'vendas', 'engajamento', 'atemporal', 'tutorial', 'reutilizável', 'tendência'];
 
 const App = {
   state: null, // Will be loaded in init
@@ -410,7 +408,7 @@ const App = {
                    </div>`
                 : `<div class="text-xs text-slate-400 italic">Slot vazio — agende conteúdo da sua biblioteca.</div>`}
             </div>
-            ${asset && !slot.isPosted ? `<button data-action="post-slot" data-id="${slot.id}" class="w-10 h-10 bg-blue-600 text-white rounded-full flex items-center justify-center hover:bg-blue-700 shadow-md transition-all active:scale-90 hover:scale-105 group-hover:rotate-12"><i class="fa-solid fa-paper-plane"></i></button>` : ''}
+            ${asset && !slot.isPosted ? `<button data-action="post-slot" data-id="${slot.id}" class="w-10 h-10 bg-blue-600 text-white rounded-full flex items-center justify-center hover:bg-blue-700 shadow-md transition-all active:scale-90 hover:scale-105 group-hover:rotate-12" title="Postar agora"><i class="fa-solid fa-paper-plane"></i></button>` : ''}
             ${slot.isPosted ? `<div class="w-10 h-10 text-green-500 flex items-center justify-center text-xl animate-bounce"><i class="fa-solid fa-circle-check"></i></div>` : ''}
           </div>`;
         }).join('');
@@ -1779,24 +1777,65 @@ const App = {
     const asset = this.findAsset(slot.assetId, slot.source);
     if (!asset) return;
 
-    // Record in History
-    this.state.history.unshift({
-      id: generateId(),
-      assetId: asset.id,
-      title: asset.title,
-      platform: slot.platform,
-      category: asset.type || 'Clipe',
-      postedAt: new Date().toISOString(),
-      performance: 'Pending',
-      link: asset.link || '',
+    // 1. Open social media deep link
+    const url = asset.link || getSocialDeepLink(slot.platform);
+    window.open(url, '_blank');
+
+    // 2. Ask user if it was posted to trigger cloud move logic
+    const body = `
+      <div class="text-center py-4">
+        <div class="w-16 h-16 bg-green-100 text-green-600 rounded-full flex items-center justify-center mx-auto mb-4 text-2xl">
+          <i class="fa-solid fa-cloud-arrow-up"></i>
+        </div>
+        <h3 class="font-bold text-slate-800 text-lg mb-2">Confirmar Postagem?</h3>
+        <p class="text-sm text-slate-500 px-4">Se o arquivo estiver em uma pasta sincronizada (Google Drive/OneDrive), o Clipper irá movê-lo automaticamente para a pasta de "Postados".</p>
+      </div>
+    `;
+
+    const footer = `
+      <div class="grid grid-cols-2 gap-3 w-full">
+        <button id="btn-confirm-post" class="bg-green-600 text-white font-bold py-3.5 rounded-xl shadow-md">Sim, Postado!</button>
+        <button id="btn-cancel-post" class="bg-slate-100 text-slate-500 font-bold py-3.5 rounded-xl" onclick="ClipperApp.closeModal()">Ainda não</button>
+      </div>
+    `;
+
+    this.openModal('Finalizar Postagem', body, footer);
+
+    document.getElementById('btn-confirm-post')?.addEventListener('click', async () => {
+      // Logic for cloud move
+      if (asset.sourceProvider && asset.sourceFolder) {
+        this.showToast('Movendo arquivo na nuvem...', 'info');
+        const connector = getConnector(asset.sourceProvider);
+        if (connector && typeof connector.moveFile === 'function') {
+          try {
+            const moved = await connector.moveFile(asset.id, asset.sourceFolder, 'posted_folder_id_placeholder');
+            if (moved) this.showToast('Arquivo movido para "Postados"!', 'success');
+          } catch (e) {
+            console.warn('Cloud move failed:', e);
+          }
+        }
+      }
+
+      // Record in History
+      this.state.history.unshift({
+        id: generateId(),
+        assetId: asset.id,
+        title: asset.title,
+        platform: slot.platform,
+        category: asset.type || 'Clipe',
+        postedAt: new Date().toISOString(),
+        performance: 'Pending',
+        link: asset.link || '',
+      });
+
+      slot.isPosted = true;
+      NotificationManager.cancelForSlot(slotId);
+
+      saveState(this.state);
+      this.closeModal();
+      this.render();
+      this.showToast('Publicado com sucesso! 🚀', 'success');
     });
-
-    slot.isPosted = true;
-    NotificationManager.cancelForSlot(slotId);
-
-    saveState(this.state);
-    this.render();
-    this.showToast('Publicado! 🚀 Progresso atualizado.', 'success');
   },
 
   updatePerformance(historyId, val) {
