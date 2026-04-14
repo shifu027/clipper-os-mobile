@@ -202,13 +202,19 @@ const TAGS = ['viral', 'sales', 'engagement', 'evergreen', 'tutorial', 'reusable
 async function loadState() {
   // 1. Try loading from Supabase (if configured)
   try {
-    const cloudState = await SyncManager.load();
-    if (cloudState) return migrateState({ ...DEFAULT_STATE, ...cloudState });
+    if (SyncManager.enabled) {
+      const cloudState = await SyncManager.load();
+      if (cloudState) {
+        const migrated = migrateState({ ...DEFAULT_STATE, ...cloudState });
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(migrated)); // Update local cache
+        return migrated;
+      }
+    }
   } catch (e) {
     console.warn('[loadState] Cloud load failed, falling back to localStorage', e);
   }
 
-  // 2. Fallback: localStorage (existing behaviour)
+  // 2. Fallback: localStorage
   return loadStateSync();
 }
 
@@ -369,58 +375,47 @@ const App = {
 
   async initApp() {
     console.log('[App] Initializing content...');
-    // Show logged-in user email in sidebar
-    const user = AuthManager.getUser();
-    const userInfoEl = document.getElementById('sidebar-user-info');
-
-    // Boss Detection
-    const BOSS_EMAIL = 'boss@clipperos.com';
-    this.isAdmin = user?.email === BOSS_EMAIL;
-
-    if (this.isAdmin) {
-      if (!this.views.find(v => v.id === 'admin')) {
-        this.views.push({ id: 'admin', icon: 'fa-user-shield', name: 'Admin Hub' });
-      }
-    }
-
-    // Ensure AI Studio is present for all
-    if (!this.views.find(v => v.id === 'gemini')) {
-      this.views.push({ id: 'gemini', icon: 'fa-wand-magic-sparkles', name: 'AI Studio' });
-    }
-
-    if (userInfoEl && user?.email) {
-      userInfoEl.innerHTML = `${user.email}${this.isAdmin ? ' <span class="bg-blue-600 text-white px-1.5 py-0.5 rounded text-[8px] font-bold uppercase ml-1">Boss</span>' : ''}`;
-      userInfoEl.classList.remove('hidden');
-    }
 
     // Initialise Supabase sync (no-op when env vars are absent)
     const syncEnabled = await SyncManager.init();
 
     if (syncEnabled) {
-      // Load from cloud and override localStorage state
+      this.syncStatus = 'syncing';
       const cloudState = await SyncManager.load();
       if (cloudState) {
         this.state = migrateState({ ...DEFAULT_STATE, ...cloudState });
-        saveState(this.state);
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(this.state));
       }
       this.syncStatus = 'synced';
 
-      // Subscribe to real-time updates from other devices
       SyncManager.subscribe((newState) => {
         this.state = migrateState({ ...this.state, ...newState });
-        saveState(this.state);
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(this.state));
         this.renderNav();
         this.render();
-        this.showToast('Data synced from another device!', 'info');
       });
+    }
+
+    const user = AuthManager.getUser();
+
+    // Boss Detection
+    const BOSS_EMAIL = 'boss@clipperos.com';
+    this.isAdmin = user?.email === BOSS_EMAIL;
+
+    // Add Admin View to the list if user is admin
+    if (this.isAdmin && !this.views.find(v => v.id === 'admin')) {
+      this.views.push({ id: 'admin', icon: 'fa-user-shield', name: 'Admin Hub' });
     }
 
     // Force setup view if no channel is configured (New User flow)
     if (!this.state.config.channel) {
       this.state.currentView = 'setup';
-    } else if (this.state.currentView === 'setup') {
-      // If they had setup but now have a channel, go to dashboard
-      this.state.currentView = 'dashboard';
+    } else {
+      // Ensure we land on a valid view
+      const validViews = this.views.map(v => v.id).concat(['setup']);
+      if (!validViews.includes(this.state.currentView)) {
+        this.state.currentView = 'dashboard';
+      }
     }
 
     // Request notification permission if not yet decided
@@ -434,12 +429,14 @@ const App = {
     this.renderNav();
     this.render();
 
-    // Safety check: ensure something is rendered
-    const content = document.getElementById('app-content');
-    if (content && !content.innerHTML.trim()) {
-      console.warn('[App] Render produced empty content, forcing Dashboard');
-      this.changeView('dashboard');
-    }
+    // Final safety: if for some reason content is empty, force dashboard
+    setTimeout(() => {
+      const content = document.getElementById('app-content');
+      if (content && !content.innerHTML.trim()) {
+        console.warn('[App] Content empty, re-rendering...');
+        this.changeView('dashboard');
+      }
+    }, 100);
   },
 
   bindGlobalEvents() {
@@ -469,12 +466,12 @@ const App = {
     const createBtn = (v, mobile) => {
       const active = this.state.currentView === v.id;
       if (mobile) {
-        return `<button data-nav="${v.id}" class="flex flex-col justify-center items-center py-2 transition-colors nav-item ${active ? 'text-blue-600 font-semibold' : 'text-slate-400'}">
+        return `<button data-nav="${v.id}" class="flex flex-col justify-center items-center py-2 transition-all nav-item ${active ? 'text-blue-600 font-semibold' : 'text-slate-400'}">
           <i class="fa-solid ${v.icon} text-xl mb-1"></i>
           <span class="text-[10px]">${v.name}</span>
         </button>`;
       }
-      return `<button data-nav="${v.id}" class="w-full flex items-center gap-3 px-6 py-3.5 mb-1 transition-colors nav-item ${active ? 'bg-blue-50 text-blue-600 font-semibold border-r-3 border-blue-600' : 'text-slate-500 hover:bg-slate-50'}">
+      return `<button data-nav="${v.id}" class="w-full flex items-center gap-3 px-6 py-3.5 mb-1 transition-all nav-item ${active ? 'bg-blue-50 text-blue-600 font-semibold border-r-4 border-blue-600' : 'text-slate-500 hover:bg-slate-50'}">
         <i class="fa-solid ${v.icon} text-lg w-5 text-center"></i>
         <span class="text-sm font-medium">${v.name}</span>
       </button>`;
@@ -485,29 +482,25 @@ const App = {
     if (desktopNav) desktopNav.innerHTML = this.views.map(v => createBtn(v, false)).join('');
 
     if (mobileNav) {
-      // Logic for Mobile Nav (Limit to 5 best tools for the role)
-      let mobileViews = [];
       const findView = (id) => this.views.find(v => v.id === id);
+      let mobileViewIds = ['dashboard', 'pipeline', 'library', 'clipper', 'gemini'];
 
       if (this.isAdmin) {
-        // Admin: Dashboard, Pipeline, Clips, AI, Admin
-        mobileViews = [
-          findView('dashboard'),
-          findView('pipeline'),
-          findView('clipper'),
-          findView('gemini'),
-          findView('admin')
-        ].filter(Boolean);
-      } else {
-        // Standard: Dashboard, Pipeline, Library, Clips, AI
-        mobileViews = [
-          findView('dashboard'),
-          findView('pipeline'),
-          findView('library'),
-          findView('clipper'),
-          findView('gemini')
-        ].filter(Boolean);
+        mobileViewIds = ['dashboard', 'pipeline', 'clipper', 'gemini', 'admin'];
       }
+
+      const mobileViews = mobileViewIds.map(id => findView(id)).filter(Boolean);
+      mobileNav.innerHTML = mobileViews.map(v => createBtn(v, true)).join('');
+    }
+
+    // Bind nav clicks
+    document.querySelectorAll('[data-nav]').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.preventDefault();
+        this.changeView(btn.dataset.nav);
+      });
+    });
+  },
 
       // Fallback if views weren't found for some reason
       if (mobileViews.length === 0) mobileViews = this.views.slice(0, 5);
@@ -553,11 +546,15 @@ const App = {
     const today = todayStr();
     const todaysRoutine = this.state.routine.filter(r => r.date === today).sort((a, b) => a.time.localeCompare(b.time));
 
+    // Progress Calculation: Based on meta frequency or slots scheduled
     const postsDone = this.state.history.filter(h => h.postedAt.startsWith(today)).length;
-    const totalGoal = todaysRoutine.length || parseInt(this.state.config.frequency) || 2;
+    const metaGoal = parseInt(this.state.config.frequency) || 2;
+    const totalGoal = Math.max(todaysRoutine.length, metaGoal);
     const progress = totalGoal === 0 ? 0 : Math.min(100, Math.round((postsDone / totalGoal) * 100));
-    const pendingClips = this.state.clips.filter(c => c.status !== 'approved' && c.status !== 'aprovado').length;
+
+    const pendingClips = this.state.clips.filter(c => !['approved', 'aprovado'].includes(c.status)).length;
     const libraryCount = this.state.library.length;
+    const viralCount = this.state.history.filter(h => h.performance === 'Viral').length;
 
     const routineHTML = todaysRoutine.length === 0
       ? `<div class="text-center py-8 text-slate-400 bg-slate-50 rounded-2xl border border-slate-100">
@@ -568,7 +565,7 @@ const App = {
       : todaysRoutine.map(slot => {
           const asset = this.findAsset(slot.assetId, slot.source);
           return `
-          <div class="flex items-center gap-4 p-4 bg-white rounded-2xl border ${slot.isPosted ? 'border-green-200 bg-green-50/30' : 'border-slate-200'} mb-3 shadow-sm transition-all">
+          <div class="flex items-center gap-4 p-4 bg-white rounded-2xl border ${slot.isPosted ? 'border-green-200 bg-green-50/30' : 'border-slate-200'} mb-3 shadow-sm transition-all group">
             <div class="font-bold ${slot.isPosted ? 'text-green-600' : 'text-slate-800'} w-14 text-center">
               <div class="text-lg">${escapeHtml(slot.time)}</div>
               <div class="text-[9px] uppercase tracking-wide text-slate-400">${escapeHtml(slot.platform.split(' ')[0])}</div>
@@ -576,13 +573,14 @@ const App = {
             <div class="flex-1 border-l border-slate-100 pl-4">
               ${asset
                 ? `<div class="text-sm font-bold ${slot.isPosted ? 'text-slate-500 line-through' : 'text-slate-800'}">${escapeHtml(asset.title)}</div>
-                   <div class="text-[10px] text-slate-400 mt-1">
+                   <div class="text-[10px] text-slate-400 mt-1 flex items-center gap-2">
                      <span class="bg-slate-100 px-1.5 py-0.5 rounded text-slate-500"><i class="fa-solid ${slot.source === 'library' ? 'fa-folder' : 'fa-scissors'}"></i> ${slot.source === 'library' ? 'Library' : 'Clips'}</span>
+                     ${asset.link ? `<i class="fa-solid fa-link text-blue-400"></i>` : ''}
                    </div>`
                 : `<div class="text-xs text-slate-400 italic">Empty slot — schedule content from your library.</div>`}
             </div>
-            ${asset && !slot.isPosted ? `<button data-action="post-slot" data-id="${slot.id}" class="w-10 h-10 bg-blue-600 text-white rounded-full flex items-center justify-center hover:bg-blue-700 shadow-md transition-transform active:scale-95"><i class="fa-solid fa-paper-plane"></i></button>` : ''}
-            ${slot.isPosted ? `<div class="w-10 h-10 text-green-500 flex items-center justify-center text-xl"><i class="fa-solid fa-circle-check"></i></div>` : ''}
+            ${asset && !slot.isPosted ? `<button data-action="post-slot" data-id="${slot.id}" class="w-10 h-10 bg-blue-600 text-white rounded-full flex items-center justify-center hover:bg-blue-700 shadow-md transition-all active:scale-90 hover:scale-105 group-hover:rotate-12"><i class="fa-solid fa-paper-plane"></i></button>` : ''}
+            ${slot.isPosted ? `<div class="w-10 h-10 text-green-500 flex items-center justify-center text-xl animate-bounce"><i class="fa-solid fa-circle-check"></i></div>` : ''}
           </div>`;
         }).join('');
 
@@ -1528,6 +1526,7 @@ const App = {
     const asset = this.findAsset(slot.assetId, slot.source);
     if (!asset) return;
 
+    // Record in History
     this.state.history.unshift({
       id: generateId(),
       assetId: asset.id,
@@ -1541,9 +1540,13 @@ const App = {
 
     slot.isPosted = true;
     NotificationManager.cancelForSlot(slotId);
+
+    // Auto-remove scheduled slot from calendar could be complex,
+    // we keep it but it's now marked as posted in app.
+
     saveState(this.state);
     this.render();
-    this.showToast('Marked as published! Logged in History.', 'success');
+    this.showToast('Published! 🚀 Progress updated.', 'success');
   },
 
   updatePerformance(historyId, val) {
