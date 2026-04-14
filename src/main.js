@@ -168,7 +168,7 @@ function todayStr() {
 function formatDate(dateStr) {
   if (!dateStr) return '';
   try {
-    return new Date(dateStr).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    return new Date(dateStr).toLocaleDateString('pt-BR', { month: 'short', day: 'numeric', year: 'numeric' });
   } catch {
     return dateStr;
   }
@@ -197,7 +197,7 @@ const DEFAULT_STATE = {
 };
 
 const PLATFORMS = ['TikTok', 'Instagram Reels', 'YouTube Shorts', 'LinkedIn', 'Facebook', 'X / Twitter'];
-const TAGS = ['viral', 'sales', 'engagement', 'evergreen', 'tutorial', 'reusable', 'trending'];
+const TAGS = ['viral', 'vendas', 'engajamento', 'atemporal', 'tutorial', 'reutilizável', 'tendência'];
 
 async function loadState() {
   // 1. Try loading from Supabase (if configured)
@@ -270,11 +270,21 @@ function migrateState(state) {
 }
 
 function migrateLibraryItem(item) {
+  const tagMap = {
+    'sales': 'vendas',
+    'engagement': 'engajamento',
+    'evergreen': 'atemporal',
+    'reusable': 'reutilizável',
+    'trending': 'tendência'
+  };
+  let tags = Array.isArray(item.tags) ? item.tags : [];
+  tags = tags.map(t => tagMap[t.toLowerCase()] || t);
+
   return {
     id: item.id || generateId(),
-    title: item.title || 'Untitled',
-    type: item.type || 'Short Video',
-    tags: Array.isArray(item.tags) ? item.tags : [],
+    title: item.title || 'Sem Título',
+    type: item.type || 'Vídeo Curto',
+    tags: tags,
     link: item.link || '',
     team: item.team || '',
     notes: item.notes || '',
@@ -286,7 +296,7 @@ function migrateLibraryItem(item) {
 function migrateClipItem(item) {
   return {
     id: item.id || generateId(),
-    title: item.title || 'Untitled Clip',
+    title: item.title || 'Clipe Sem Título',
     minIn: item.minIn || '00:00',
     minOut: item.minOut || '00:00',
     hook: item.hook || item.gancho || '',
@@ -303,7 +313,7 @@ function migrateRoutineItem(item) {
     id: item.id || generateId(),
     date: item.date || todayStr(),
     time: item.time || '12:00',
-    platform: item.platform || 'Pending',
+    platform: item.platform || 'Pendente',
     assetId: item.assetId || null,
     source: item.source || null,
     isPosted: item.isPosted || false,
@@ -314,11 +324,11 @@ function migrateHistoryItem(item) {
   return {
     id: item.id || generateId(),
     assetId: item.assetId || '',
-    title: item.title || 'Untitled',
+    title: item.title || 'Sem Título',
     platform: item.platform || '',
-    category: item.category || 'Clip',
+    category: item.category || 'Clipe',
     postedAt: item.postedAt || new Date().toISOString(),
-    performance: item.performance || 'Pending',
+    performance: item.performance || 'Pendente',
     link: item.link || '',
   };
 }
@@ -335,11 +345,11 @@ const App = {
   isAdmin: false,
 
   views: [
-    { id: 'dashboard', icon: 'fa-house', name: 'Dashboard' },
+    { id: 'dashboard', icon: 'fa-house', name: 'Início' },
     { id: 'pipeline', icon: 'fa-calendar-days', name: 'Pipeline' },
-    { id: 'library', icon: 'fa-photo-film', name: 'Library' },
-    { id: 'clipper', icon: 'fa-scissors', name: 'Clips' },
-    { id: 'history', icon: 'fa-chart-pie', name: 'History' },
+    { id: 'library', icon: 'fa-photo-film', name: 'Biblioteca' },
+    { id: 'clipper', icon: 'fa-scissors', name: 'Clipes' },
+    { id: 'history', icon: 'fa-chart-pie', name: 'Histórico' },
     { id: 'gemini', icon: 'fa-wand-magic-sparkles', name: 'AI Studio' },
   ],
 
@@ -391,7 +401,7 @@ const App = {
 
     // Add Admin View to the list if user is admin
     if (this.isAdmin && !this.views.find(v => v.id === 'admin')) {
-      this.views.push({ id: 'admin', icon: 'fa-user-shield', name: 'Admin Hub' });
+      this.views.push({ id: 'admin', icon: 'fa-user-shield', name: 'Painel Admin' });
     }
 
     // Force setup view if no channel is configured
@@ -556,8 +566,8 @@ const App = {
     const routineHTML = todaysRoutine.length === 0
       ? `<div class="text-center py-8 text-slate-400 bg-slate-50 rounded-2xl border border-slate-100">
            <i class="fa-solid fa-calendar-check text-3xl mb-3 text-slate-300"></i>
-           <p class="text-sm">No posts scheduled for today.</p>
-           <button data-action="goto-pipeline" class="mt-3 text-sm font-bold text-blue-600 hover:underline">Open Pipeline →</button>
+           <p class="text-sm">Nenhum post agendado para hoje.</p>
+           <button data-action="goto-pipeline" class="mt-3 text-sm font-bold text-blue-600 hover:underline">Abrir Pipeline →</button>
          </div>`
       : todaysRoutine.map(slot => {
           const asset = this.findAsset(slot.assetId, slot.source);
@@ -571,10 +581,10 @@ const App = {
               ${asset
                 ? `<div class="text-sm font-bold ${slot.isPosted ? 'text-slate-500 line-through' : 'text-slate-800'}">${escapeHtml(asset.title)}</div>
                    <div class="text-[10px] text-slate-400 mt-1 flex items-center gap-2">
-                     <span class="bg-slate-100 px-1.5 py-0.5 rounded text-slate-500"><i class="fa-solid ${slot.source === 'library' ? 'fa-folder' : 'fa-scissors'}"></i> ${slot.source === 'library' ? 'Library' : 'Clips'}</span>
+                     <span class="bg-slate-100 px-1.5 py-0.5 rounded text-slate-500"><i class="fa-solid ${slot.source === 'library' ? 'fa-folder' : 'fa-scissors'}"></i> ${slot.source === 'library' ? 'Biblioteca' : 'Clipes'}</span>
                      ${asset.link ? `<i class="fa-solid fa-link text-blue-400"></i>` : ''}
                    </div>`
-                : `<div class="text-xs text-slate-400 italic">Empty slot — schedule content from your library.</div>`}
+                : `<div class="text-xs text-slate-400 italic">Slot vazio — agende conteúdo da sua biblioteca.</div>`}
             </div>
             ${asset && !slot.isPosted ? `<button data-action="post-slot" data-id="${slot.id}" class="w-10 h-10 bg-blue-600 text-white rounded-full flex items-center justify-center hover:bg-blue-700 shadow-md transition-all active:scale-90 hover:scale-105 group-hover:rotate-12"><i class="fa-solid fa-paper-plane"></i></button>` : ''}
             ${slot.isPosted ? `<div class="w-10 h-10 text-green-500 flex items-center justify-center text-xl animate-bounce"><i class="fa-solid fa-circle-check"></i></div>` : ''}
@@ -584,27 +594,27 @@ const App = {
     return `
       <div class="flex justify-between items-end mb-6">
         <div>
-          <h2 class="text-2xl md:text-3xl font-bold text-slate-800">Welcome${this.state.config.channel ? ', ' + escapeHtml(this.state.config.channel) : ''}!</h2>
-          <p class="text-slate-500 text-sm mt-1">Your content operations overview for today.</p>
+          <h2 class="text-2xl md:text-3xl font-bold text-slate-800">Bem-vindo${this.state.config.channel ? ', ' + escapeHtml(this.state.config.channel) : ''}!</h2>
+          <p class="text-slate-500 text-sm mt-1">Sua visão geral de operações de conteúdo hoje.</p>
         </div>
       </div>
 
       <div class="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 mb-8">
         <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
-          <p class="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1"><i class="fa-solid fa-bullseye text-blue-500 mr-1"></i> Today's Progress</p>
+          <p class="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1"><i class="fa-solid fa-bullseye text-blue-500 mr-1"></i> Progresso Hoje</p>
           <div class="flex items-end gap-2"><h3 class="text-2xl font-bold text-slate-800">${progress}%</h3></div>
           <div class="w-full bg-slate-100 h-1.5 rounded-full mt-2 overflow-hidden"><div class="bg-blue-500 h-full rounded-full transition-all" style="width:${progress}%"></div></div>
         </div>
         <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
-          <p class="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1"><i class="fa-solid fa-check-double text-green-500 mr-1"></i> Published</p>
+          <p class="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1"><i class="fa-solid fa-check-double text-green-500 mr-1"></i> Publicado</p>
           <h3 class="text-2xl font-bold text-slate-800">${postsDone} <span class="text-xs font-normal text-slate-400">/ ${totalGoal}</span></h3>
         </div>
         <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm cursor-pointer hover:border-amber-300" data-action="goto-clipper">
-          <p class="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1"><i class="fa-solid fa-scissors text-amber-500 mr-1"></i> Pending Clips</p>
+          <p class="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1"><i class="fa-solid fa-scissors text-amber-500 mr-1"></i> Clipes Pendentes</p>
           <h3 class="text-2xl font-bold text-slate-800">${pendingClips}</h3>
         </div>
         <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm cursor-pointer hover:border-purple-300" data-action="goto-library">
-          <p class="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1"><i class="fa-solid fa-photo-film text-purple-500 mr-1"></i> Library Items</p>
+          <p class="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1"><i class="fa-solid fa-photo-film text-purple-500 mr-1"></i> Itens na Biblioteca</p>
           <h3 class="text-2xl font-bold text-slate-800">${libraryCount}</h3>
         </div>
       </div>
@@ -612,8 +622,8 @@ const App = {
       <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div class="lg:col-span-2">
           <div class="flex justify-between items-center mb-4">
-            <h3 class="font-bold text-lg text-slate-800">Today's Schedule</h3>
-            <button data-action="goto-pipeline" class="text-sm text-blue-600 font-bold hover:underline">View Pipeline →</button>
+            <h3 class="font-bold text-lg text-slate-800">Agenda de Hoje</h3>
+            <button data-action="goto-pipeline" class="text-sm text-blue-600 font-bold hover:underline">Ver Pipeline →</button>
           </div>
           <div class="bg-slate-50 p-2 md:p-4 rounded-3xl border border-slate-200">
             ${routineHTML}
@@ -622,20 +632,20 @@ const App = {
 
         <div>
           <div class="bg-gradient-to-br from-slate-800 to-slate-900 rounded-3xl p-6 text-white shadow-lg">
-            <h3 class="font-bold mb-2 flex items-center gap-2"><i class="fa-solid fa-chart-line"></i> Quick Stats</h3>
-            <p class="text-xs text-slate-300 mb-4">Lifetime publishing performance.</p>
+            <h3 class="font-bold mb-2 flex items-center gap-2"><i class="fa-solid fa-chart-line"></i> Estatísticas Rápidas</h3>
+            <p class="text-xs text-slate-300 mb-4">Desempenho total de publicações.</p>
             <div class="space-y-3">
               <div class="bg-white/10 border border-white/10 p-3 rounded-xl flex items-center gap-3">
                 <i class="fa-solid fa-check-circle text-green-400"></i>
-                <div><div class="text-sm font-bold">${this.state.history.length}</div><div class="text-[10px] text-slate-400">Total Published</div></div>
+                <div><div class="text-sm font-bold">${this.state.history.length}</div><div class="text-[10px] text-slate-400">Total Publicado</div></div>
               </div>
               <div class="bg-white/10 border border-white/10 p-3 rounded-xl flex items-center gap-3">
                 <i class="fa-solid fa-fire text-orange-400"></i>
-                <div><div class="text-sm font-bold">${this.state.history.filter(h => h.performance === 'Viral').length}</div><div class="text-[10px] text-slate-400">Viral Posts</div></div>
+                <div><div class="text-sm font-bold">${this.state.history.filter(h => h.performance === 'Viral').length}</div><div class="text-[10px] text-slate-400">Posts Virais</div></div>
               </div>
               <div class="bg-white/10 border border-white/10 p-3 rounded-xl flex items-center gap-3">
                 <i class="fa-solid fa-box-open text-blue-400"></i>
-                <div><div class="text-sm font-bold">${this.state.library.length + this.state.clips.filter(c => c.status === 'approved').length}</div><div class="text-[10px] text-slate-400">Ready to Publish</div></div>
+                <div><div class="text-sm font-bold">${this.state.library.length + this.state.clips.filter(c => c.status === 'approved').length}</div><div class="text-[10px] text-slate-400">Pronto para Publicar</div></div>
               </div>
             </div>
           </div>
@@ -649,8 +659,8 @@ const App = {
     const libHTML = lib.length === 0
       ? `<div class="col-span-full py-16 text-center text-slate-400 border-2 border-dashed border-slate-200 rounded-3xl bg-white">
            <i class="fa-solid fa-folder-open text-5xl mb-4 text-slate-300"></i>
-           <p class="text-sm">Your content library is empty.</p>
-           <p class="text-xs mt-1 text-slate-400">Add finished assets ready for scheduling.</p>
+           <p class="text-sm">Sua biblioteca de conteúdo está vazia.</p>
+           <p class="text-xs mt-1 text-slate-400">Adicione ativos finalizados prontos para agendamento.</p>
          </div>`
       : lib.map(item => `
           <div class="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm hover:shadow-md transition flex flex-col justify-between h-full">
@@ -667,7 +677,7 @@ const App = {
               </p>
             </div>
             <div class="flex gap-2 border-t border-slate-100 pt-4">
-              <button data-action="schedule-asset" data-id="${item.id}" data-source="library" class="flex-1 bg-slate-900 text-white text-xs py-2.5 rounded-xl font-bold hover:bg-slate-800 shadow-md active:scale-95 transition-transform"><i class="fa-solid fa-calendar-plus mr-1"></i> Schedule</button>
+              <button data-action="schedule-asset" data-id="${item.id}" data-source="library" class="flex-1 bg-slate-900 text-white text-xs py-2.5 rounded-xl font-bold hover:bg-slate-800 shadow-md active:scale-95 transition-transform"><i class="fa-solid fa-calendar-plus mr-1"></i> Agendar</button>
               ${item.link ? `<a href="${escapeHtml(item.link)}" target="_blank" rel="noopener noreferrer" class="bg-slate-100 text-slate-600 text-xs px-4 py-2.5 rounded-xl hover:bg-slate-200 font-medium transition-colors inline-flex items-center"><i class="fa-solid fa-cloud-arrow-down"></i></a>` : ''}
             </div>
           </div>
@@ -676,14 +686,14 @@ const App = {
     return `
       <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
         <div>
-          <h2 class="text-2xl font-bold text-slate-800">Content Library</h2>
-          <p class="text-sm text-slate-500 mt-1">Finished content ready for scheduling and publishing.</p>
+          <h2 class="text-2xl font-bold text-slate-800">Biblioteca de Conteúdo</h2>
+          <p class="text-sm text-slate-500 mt-1">Conteúdo finalizado pronto para agendamento e publicação.</p>
         </div>
-        <button data-action="add-library" class="w-full md:w-auto bg-blue-600 text-white px-5 py-2.5 rounded-xl text-sm font-bold shadow-md hover:bg-blue-700 transition flex items-center justify-center gap-2"><i class="fa-solid fa-plus"></i> New Content</button>
+        <button data-action="add-library" class="w-full md:w-auto bg-blue-600 text-white px-5 py-2.5 rounded-xl text-sm font-bold shadow-md hover:bg-blue-700 transition flex items-center justify-center gap-2"><i class="fa-solid fa-plus"></i> Novo Conteúdo</button>
       </div>
 
       <div class="flex gap-2 overflow-x-auto hide-scrollbar pb-4 mb-2">
-        <button class="tag-pill bg-slate-800 text-white whitespace-nowrap">All</button>
+        <button class="tag-pill bg-slate-800 text-white whitespace-nowrap">Todos</button>
         ${TAGS.map(t => `<button class="tag-pill tag-${t} whitespace-nowrap bg-white hover:bg-slate-50">#${t}</button>`).join('')}
       </div>
 
@@ -696,19 +706,19 @@ const App = {
   getClipperHTML() {
     const clips = this.state.clips;
     const statusStyles = {
-      raw: { color: 'slate', icon: 'fa-box', label: 'Raw' },
-      bruto: { color: 'slate', icon: 'fa-box', label: 'Raw' },
-      editing: { color: 'amber', icon: 'fa-scissors', label: 'Editing' },
-      editando: { color: 'amber', icon: 'fa-scissors', label: 'Editing' },
-      approved: { color: 'green', icon: 'fa-check-double', label: 'Approved' },
-      aprovado: { color: 'green', icon: 'fa-check-double', label: 'Approved' },
+      raw: { color: 'slate', icon: 'fa-box', label: 'Bruto' },
+      bruto: { color: 'slate', icon: 'fa-box', label: 'Bruto' },
+      editing: { color: 'amber', icon: 'fa-scissors', label: 'Editando' },
+      editando: { color: 'amber', icon: 'fa-scissors', label: 'Editando' },
+      approved: { color: 'green', icon: 'fa-check-double', label: 'Aprovado' },
+      aprovado: { color: 'green', icon: 'fa-check-double', label: 'Aprovado' },
     };
 
     const clipsHTML = clips.length === 0
       ? `<div class="py-16 text-center text-slate-400 border-2 border-dashed border-slate-200 rounded-3xl w-full bg-white">
            <i class="fa-solid fa-film text-5xl mb-4 text-slate-300"></i>
-           <p class="text-sm">No clips in the queue.</p>
-           <p class="text-xs mt-1 text-slate-400">Start by clipping segments from your long-form content.</p>
+           <p class="text-sm">Nenhum clipe na fila.</p>
+           <p class="text-xs mt-1 text-slate-400">Comece recortando segmentos do seu conteúdo longo.</p>
          </div>`
       : clips.map(c => {
           const st = statusStyles[c.status] || statusStyles.raw;
@@ -728,15 +738,15 @@ const App = {
             <h4 class="font-bold text-slate-800 text-lg mb-2 leading-tight">${escapeHtml(c.title)}</h4>
 
             ${c.hook ? `<div class="bg-slate-50 rounded-xl p-3 border border-slate-100 mb-3 space-y-2">
-              <p class="text-xs text-slate-600"><strong class="text-slate-800">Hook (0-3s):</strong> ${escapeHtml(c.hook)}</p>
+              <p class="text-xs text-slate-600"><strong class="text-slate-800">Gancho (0-3s):</strong> ${escapeHtml(c.hook)}</p>
               ${c.cta ? `<p class="text-xs text-slate-600"><strong class="text-slate-800">CTA:</strong> ${escapeHtml(c.cta)}</p>` : ''}
             </div>` : ''}
 
             <div class="flex justify-between items-center mt-4 pt-4 border-t border-slate-100">
-              <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider"><i class="fa-solid fa-bullhorn mr-1"></i> ${escapeHtml(c.platform || 'Multi-platform')}</span>
+              <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider"><i class="fa-solid fa-bullhorn mr-1"></i> ${escapeHtml(c.platform || 'Multi-plataforma')}</span>
               ${c.status === 'approved' || c.status === 'aprovado'
-                ? `<button data-action="schedule-asset" data-id="${c.id}" data-source="clip" class="bg-blue-600 text-white text-xs px-4 py-2 rounded-xl font-bold hover:bg-blue-700 shadow-md active:scale-95 transition-transform"><i class="fa-solid fa-calendar-plus mr-1"></i> Schedule</button>`
-                : `<button data-action="cycle-clip" data-id="${c.id}" class="text-xs font-semibold text-${st.color}-600 underline">Advance Stage →</button>`}
+                ? `<button data-action="schedule-asset" data-id="${c.id}" data-source="clip" class="bg-blue-600 text-white text-xs px-4 py-2 rounded-xl font-bold hover:bg-blue-700 shadow-md active:scale-95 transition-transform"><i class="fa-solid fa-calendar-plus mr-1"></i> Agendar</button>`
+                : `<button data-action="cycle-clip" data-id="${c.id}" class="text-xs font-semibold text-${st.color}-600 underline">Avançar Estágio →</button>`}
             </div>
           </div>`;
         }).join('');
@@ -744,22 +754,22 @@ const App = {
     return `
       <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
         <div>
-          <h2 class="text-2xl font-bold text-slate-800">Clip Manager</h2>
-          <p class="text-sm text-slate-500 mt-1">Track clips from raw footage to approved and ready to publish.</p>
+          <h2 class="text-2xl font-bold text-slate-800">Gerenciador de Clipes</h2>
+          <p class="text-sm text-slate-500 mt-1">Acompanhe clipes desde o material bruto até o aprovado e pronto para publicar.</p>
         </div>
-        <button data-action="add-clip" class="w-full md:w-auto bg-slate-900 text-white px-5 py-2.5 rounded-xl text-sm font-bold shadow-md hover:bg-slate-800 transition flex items-center justify-center gap-2"><i class="fa-solid fa-scissors"></i> New Clip</button>
+        <button data-action="add-clip" class="w-full md:w-auto bg-slate-900 text-white px-5 py-2.5 rounded-xl text-sm font-bold shadow-md hover:bg-slate-800 transition flex items-center justify-center gap-2"><i class="fa-solid fa-scissors"></i> Novo Clipe</button>
       </div>
 
       <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div class="lg:col-span-2 space-y-2">${clipsHTML}</div>
         <div>
           <div class="bg-white p-5 rounded-3xl shadow-sm border border-slate-200 sticky top-4">
-            <h3 class="font-bold text-slate-800 mb-3 border-b border-slate-100 pb-2"><i class="fa-solid fa-list-check text-blue-500 mr-2"></i> Workflow Guide</h3>
+            <h3 class="font-bold text-slate-800 mb-3 border-b border-slate-100 pb-2"><i class="fa-solid fa-list-check text-blue-500 mr-2"></i> Guia de Workflow</h3>
             <ol class="text-sm text-slate-600 space-y-3 pl-2">
-              <li class="flex gap-2"><span class="font-bold text-slate-400">1.</span> Log clip timestamps from podcasts, lives, or long videos.</li>
-              <li class="flex gap-2"><span class="font-bold text-slate-400">2.</span> Write a strong hook for the first 3 seconds.</li>
-              <li class="flex gap-2"><span class="font-bold text-slate-400">3.</span> Move to <span class="bg-amber-100 text-amber-700 px-1 rounded text-[10px] font-bold">Editing</span> when in progress.</li>
-              <li class="flex gap-2"><span class="font-bold text-slate-400">4.</span> Mark as <span class="bg-green-100 text-green-700 px-1 rounded text-[10px] font-bold">Approved</span> and schedule for publishing.</li>
+              <li class="flex gap-2"><span class="font-bold text-slate-400">1.</span> Registre tempos de clipes de podcasts, lives ou vídeos longos.</li>
+              <li class="flex gap-2"><span class="font-bold text-slate-400">2.</span> Escreva um gancho forte para os primeiros 3 segundos.</li>
+              <li class="flex gap-2"><span class="font-bold text-slate-400">3.</span> Mova para <span class="bg-amber-100 text-amber-700 px-1 rounded text-[10px] font-bold">Editando</span> quando estiver em progresso.</li>
+              <li class="flex gap-2"><span class="font-bold text-slate-400">4.</span> Marque como <span class="bg-green-100 text-green-700 px-1 rounded text-[10px] font-bold">Aprovado</span> e agende para publicação.</li>
             </ol>
           </div>
         </div>
@@ -770,12 +780,13 @@ const App = {
   getPipelineHTML() {
     const today = new Date();
     const days = [];
+    const weekdays = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
     for (let i = 0; i < 7; i++) {
       const d = new Date(today);
       d.setDate(today.getDate() + i);
       days.push({
         dateStr: d.toISOString().split('T')[0],
-        dayName: d.toLocaleDateString('en-US', { weekday: 'short' }),
+        dayName: weekdays[d.getDay()],
         dayNum: d.getDate(),
       });
     }
@@ -793,8 +804,8 @@ const App = {
     const slotsHTML = slots.length === 0
       ? `<div class="text-center py-10 text-slate-400 border-2 border-dashed border-slate-200 rounded-2xl bg-white">
            <i class="fa-solid fa-calendar-xmark text-3xl mb-3 text-slate-300"></i>
-           <p class="text-sm">No items scheduled for this day.</p>
-           <button data-action="add-slot" data-date="${selectedDate}" class="mt-3 text-sm font-bold text-blue-500 hover:underline">+ Add Time Slot</button>
+           <p class="text-sm">Nenhum item agendado para este dia.</p>
+           <button data-action="add-slot" data-date="${selectedDate}" class="mt-3 text-sm font-bold text-blue-500 hover:underline">+ Adicionar Horário</button>
          </div>`
       : slots.map(slot => {
           const asset = this.findAsset(slot.assetId, slot.source);
@@ -809,17 +820,17 @@ const App = {
                        <h4 class="text-sm font-bold text-slate-800 truncate" title="${escapeHtml(asset.title)}">${escapeHtml(asset.title)}</h4>
                      </div>
                      <div class="flex items-center gap-1 ml-2 shrink-0">
-                       <button data-action="add-to-calendar" data-id="${slot.id}" class="text-slate-300 hover:text-blue-500 w-7 h-7 flex items-center justify-center rounded-lg hover:bg-blue-50 transition-colors" title="Add to Calendar"><i class="fa-solid fa-calendar-plus text-xs"></i></button>
-                       <button data-action="unschedule" data-id="${slot.id}" class="text-slate-300 hover:text-red-500 w-7 h-7 flex items-center justify-center rounded-lg hover:bg-red-50 transition-colors" title="Unschedule"><i class="fa-solid fa-xmark"></i></button>
+                       <button data-action="add-to-calendar" data-id="${slot.id}" class="text-slate-300 hover:text-blue-500 w-7 h-7 flex items-center justify-center rounded-lg hover:bg-blue-50 transition-colors" title="Adicionar ao Calendário"><i class="fa-solid fa-calendar-plus text-xs"></i></button>
+                       <button data-action="unschedule" data-id="${slot.id}" class="text-slate-300 hover:text-red-500 w-7 h-7 flex items-center justify-center rounded-lg hover:bg-red-50 transition-colors" title="Desagendar"><i class="fa-solid fa-xmark"></i></button>
                      </div>
                    </div>`
                 : `<div class="flex justify-between items-center">
-                     <div class="text-xs text-slate-400 italic">Available slot (${escapeHtml(slot.platform)})</div>
+                     <div class="text-xs text-slate-400 italic">Horário disponível (${escapeHtml(slot.platform)})</div>
                      <button data-action="delete-slot" data-id="${slot.id}" class="text-slate-300 hover:text-red-500 p-1"><i class="fa-solid fa-trash"></i></button>
                    </div>`}
             </div>
           </div>`;
-        }).join('') + `<button data-action="add-slot" data-date="${selectedDate}" class="w-full border-2 border-dashed border-slate-200 text-slate-400 hover:border-blue-400 hover:text-blue-500 hover:bg-blue-50/50 rounded-2xl p-3 text-center text-sm font-bold transition-colors">+ New Time Slot</button>`;
+        }).join('') + `<button data-action="add-slot" data-date="${selectedDate}" class="w-full border-2 border-dashed border-slate-200 text-slate-400 hover:border-blue-400 hover:text-blue-500 hover:bg-blue-50/50 rounded-2xl p-3 text-center text-sm font-bold transition-colors">+ Novo Horário</button>`;
 
     // Ready assets not yet scheduled or posted
     const scheduledIds = new Set(this.state.routine.map(r => r.assetId).filter(Boolean));
@@ -830,23 +841,23 @@ const App = {
     ].filter(a => !scheduledIds.has(a.id) && !postedIds.has(a.id));
 
     const readyHTML = readyAssets.length === 0
-      ? `<div class="text-xs text-slate-400 text-center py-6">No unscheduled content. Approve clips or add to the library first.</div>`
+      ? `<div class="text-xs text-slate-400 text-center py-6">Nenhum conteúdo pendente. Aprove clipes ou adicione à biblioteca primeiro.</div>`
       : readyAssets.map(item => `
           <div class="bg-white p-3 rounded-xl shadow-sm border border-slate-200 mb-2 hover:border-blue-300 transition-colors">
-            <div class="text-[9px] font-bold text-slate-400 uppercase mb-1">${escapeHtml(item.type || 'Approved Clip')}</div>
+            <div class="text-[9px] font-bold text-slate-400 uppercase mb-1">${escapeHtml(item.type || 'Clipe Aprovado')}</div>
             <h4 class="text-sm font-bold text-slate-800 mb-3 leading-tight line-clamp-2">${escapeHtml(item.title)}</h4>
-            <button data-action="schedule-asset" data-id="${item.id}" data-source="${item.type ? 'library' : 'clip'}" class="w-full bg-slate-50 hover:bg-blue-50 text-slate-600 hover:text-blue-600 border border-slate-200 hover:border-blue-200 text-xs py-2 rounded-lg font-bold transition-colors"><i class="fa-solid fa-calendar-plus mr-1"></i> Schedule</button>
+            <button data-action="schedule-asset" data-id="${item.id}" data-source="${item.type ? 'library' : 'clip'}" class="w-full bg-slate-50 hover:bg-blue-50 text-slate-600 hover:text-blue-600 border border-slate-200 hover:border-blue-200 text-xs py-2 rounded-lg font-bold transition-colors"><i class="fa-solid fa-calendar-plus mr-1"></i> Agendar</button>
           </div>
         `).join('');
 
     return `
       <div class="flex justify-between items-center mb-6">
         <div>
-          <h2 class="text-2xl font-bold text-slate-800">Content Pipeline</h2>
-          <p class="text-sm text-slate-500 mt-1">Schedule and manage your publishing calendar.</p>
+          <h2 class="text-2xl font-bold text-slate-800">Pipeline de Conteúdo</h2>
+          <p class="text-sm text-slate-500 mt-1">Agende e gerencie seu calendário de publicações.</p>
         </div>
         <button data-action="export-calendar" class="flex items-center gap-1.5 bg-blue-50 hover:bg-blue-100 text-blue-600 border border-blue-200 text-xs font-bold px-3 py-2 rounded-xl transition-colors">
-          <i class="fa-solid fa-calendar-arrow-up"></i> <span class="hidden sm:inline">Export to Calendar</span>
+          <i class="fa-solid fa-calendar-arrow-up"></i> <span class="hidden sm:inline">Exportar Calendário</span>
         </button>
       </div>
 
@@ -856,7 +867,7 @@ const App = {
 
       <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div class="lg:col-span-2">
-          <h3 class="font-bold text-slate-700 mb-4">Schedule for ${formatDate(selectedDate)}</h3>
+          <h3 class="font-bold text-slate-700 mb-4">Agenda para ${formatDate(selectedDate)}</h3>
           <div class="bg-slate-50 p-4 rounded-3xl border border-slate-200">
             ${slotsHTML}
           </div>
@@ -864,7 +875,7 @@ const App = {
 
         <div>
           <div class="bg-slate-100 rounded-3xl p-4 border border-slate-200 h-full max-h-[600px] flex flex-col">
-            <h3 class="font-bold text-slate-700 mb-4 flex items-center gap-2"><i class="fa-solid fa-box-open text-blue-500"></i> Ready Content</h3>
+            <h3 class="font-bold text-slate-700 mb-4 flex items-center gap-2"><i class="fa-solid fa-box-open text-blue-500"></i> Conteúdo Pronto</h3>
             <div class="overflow-y-auto flex-1 pr-2 hide-scrollbar">
               ${readyHTML}
             </div>
@@ -892,14 +903,14 @@ const App = {
     const listHTML = hist.length === 0
       ? `<div class="py-16 text-center text-slate-400 bg-white rounded-3xl border border-slate-200">
            <i class="fa-solid fa-chart-line text-5xl mb-4 text-slate-300"></i>
-           <p class="text-sm">No published content yet.</p>
-           <p class="text-xs mt-1 text-slate-400">Publish content from your pipeline to build your history.</p>
+           <p class="text-sm">Nenhum conteúdo publicado ainda.</p>
+           <p class="text-xs mt-1 text-slate-400">Publique conteúdo do seu pipeline para construir seu histórico.</p>
          </div>`
       : hist.map(h => `
           <div class="bg-white border border-slate-200 rounded-2xl p-4 md:p-5 shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-3 hover:shadow-md transition">
             <div class="flex-1">
               <div class="flex items-center gap-2 mb-2 flex-wrap">
-                <span class="text-[10px] font-bold px-2 py-0.5 rounded bg-slate-100 text-slate-600 border border-slate-200"><i class="fa-solid fa-bullhorn"></i> ${escapeHtml(h.platform || 'General')}</span>
+                <span class="text-[10px] font-bold px-2 py-0.5 rounded bg-slate-100 text-slate-600 border border-slate-200"><i class="fa-solid fa-bullhorn"></i> ${escapeHtml(h.platform || 'Geral')}</span>
                 <span class="text-[10px] font-medium text-slate-400"><i class="fa-regular fa-calendar-check mr-1"></i> ${formatDate(h.postedAt)}</span>
                 <span class="text-[10px] font-medium text-slate-400"><i class="fa-solid fa-folder-tree mr-1"></i> ${escapeHtml(h.category)}</span>
               </div>
@@ -909,14 +920,14 @@ const App = {
               <div class="flex flex-col flex-1 md:flex-none">
                 <label class="text-[9px] font-bold text-slate-400 uppercase mb-1 ml-1">Performance</label>
                 <select data-action="set-perf" data-id="${h.id}" class="bg-slate-50 border border-slate-200 text-xs font-bold rounded-xl px-3 py-2.5 focus:ring-2 focus:ring-blue-500 outline-none w-full md:w-32 ${h.performance === 'Viral' ? 'text-orange-600 bg-orange-50 border-orange-200' : 'text-slate-600'}">
-                  <option value="Pending" ${h.performance === 'Pending' || h.performance === 'Pendente' ? 'selected' : ''}>⏳ Evaluate</option>
-                  <option value="Low" ${h.performance === 'Low' || h.performance === 'Baixo' ? 'selected' : ''}>Low</option>
-                  <option value="Medium" ${h.performance === 'Medium' || h.performance === 'Médio' ? 'selected' : ''}>Medium</option>
-                  <option value="High" ${h.performance === 'High' || h.performance === 'Alto' ? 'selected' : ''}>High</option>
+                  <option value="Pending" ${h.performance === 'Pending' || h.performance === 'Pendente' ? 'selected' : ''}>⏳ Avaliar</option>
+                  <option value="Low" ${h.performance === 'Low' || h.performance === 'Baixo' ? 'selected' : ''}>Baixo</option>
+                  <option value="Medium" ${h.performance === 'Medium' || h.performance === 'Médio' ? 'selected' : ''}>Médio</option>
+                  <option value="High" ${h.performance === 'High' || h.performance === 'Alto' ? 'selected' : ''}>Alto</option>
                   <option value="Viral" ${h.performance === 'Viral' ? 'selected' : ''}>🔥 Viral</option>
                 </select>
               </div>
-              <button data-action="reuse-content" data-id="${h.id}" class="bg-blue-50 text-blue-600 text-xs font-bold px-4 py-2.5 rounded-xl hover:bg-blue-100 transition whitespace-nowrap self-end border border-blue-100 shadow-sm active:scale-95"><i class="fa-solid fa-recycle mr-1"></i> Reuse</button>
+              <button data-action="reuse-content" data-id="${h.id}" class="bg-blue-50 text-blue-600 text-xs font-bold px-4 py-2.5 rounded-xl hover:bg-blue-100 transition whitespace-nowrap self-end border border-blue-100 shadow-sm active:scale-95"><i class="fa-solid fa-recycle mr-1"></i> Reutilizar</button>
             </div>
           </div>
         `).join('');
@@ -924,8 +935,8 @@ const App = {
     return `
       <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
         <div>
-          <h2 class="text-2xl font-bold text-slate-800">Publishing History</h2>
-          <p class="text-sm text-slate-500 mt-1">Track performance and recycle your best content.</p>
+          <h2 class="text-2xl font-bold text-slate-800">Histórico de Publicação</h2>
+          <p class="text-sm text-slate-500 mt-1">Acompanhe o desempenho e recicle seu melhor conteúdo.</p>
         </div>
       </div>
 
@@ -940,11 +951,11 @@ const App = {
         </div>
         <div class="bg-green-50 p-5 rounded-3xl border border-green-200 shadow-sm text-center">
           <div class="text-3xl font-bold text-green-600">${stats.high}</div>
-          <div class="text-[10px] font-bold text-green-500 uppercase tracking-wider mt-1">High Perf</div>
+          <div class="text-[10px] font-bold text-green-500 uppercase tracking-wider mt-1">Alta Perf</div>
         </div>
         <div class="bg-slate-900 p-5 rounded-3xl border border-slate-800 shadow-lg text-center">
           <div class="text-3xl font-bold text-white">${topPlatform ? topPlatform[1] : 0}</div>
-          <div class="text-[10px] font-bold text-slate-400 uppercase tracking-wider mt-1">${topPlatform ? topPlatform[0] : 'Top Platform'}</div>
+          <div class="text-[10px] font-bold text-slate-400 uppercase tracking-wider mt-1">${topPlatform ? topPlatform[0] : 'Top Plataforma'}</div>
         </div>
       </div>
 
@@ -953,50 +964,50 @@ const App = {
 
   // ─── Admin Hub ──────────────────────────────────────
   getAdminHTML() {
-    if (!this.isAdmin) return '<div class="p-8 text-center text-red-500 font-bold">Access Denied</div>';
+    if (!this.isAdmin) return '<div class="p-8 text-center text-red-500 font-bold">Acesso Negado</div>';
 
     return `
       <div class="flex justify-between items-center mb-8">
         <div>
-          <h2 class="text-3xl font-bold text-slate-900 tracking-tight">Admin Hub</h2>
-          <p class="text-slate-500 text-sm mt-1">Monitor users, clients and ecosystem health.</p>
+          <h2 class="text-3xl font-bold text-slate-900 tracking-tight">Painel Administrativo</h2>
+          <p class="text-slate-500 text-sm mt-1">Monitore usuários, clientes e a saúde do ecossistema.</p>
         </div>
-        <div class="bg-blue-600 text-white px-4 py-2 rounded-2xl text-xs font-bold shadow-lg shadow-blue-600/20">BOSS MODE</div>
+        <div class="bg-blue-600 text-white px-4 py-2 rounded-2xl text-xs font-bold shadow-lg shadow-blue-600/20">MODO BOSS</div>
       </div>
 
       <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
         <div class="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm relative overflow-hidden group">
           <i class="fa-solid fa-users text-blue-500/10 text-6xl absolute -right-4 -bottom-4 group-hover:scale-110 transition-transform"></i>
-          <p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Total Users</p>
-          <h3 class="text-3xl font-bold text-slate-800">1,284</h3>
-          <p class="text-[10px] text-green-600 font-bold mt-2"><i class="fa-solid fa-caret-up"></i> +12% this month</p>
+          <p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Total de Usuários</p>
+          <h3 class="text-3xl font-bold text-slate-800">1.284</h3>
+          <p class="text-[10px] text-green-600 font-bold mt-2"><i class="fa-solid fa-caret-up"></i> +12% este mês</p>
         </div>
         <div class="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm relative overflow-hidden group">
           <i class="fa-solid fa-clapperboard text-purple-500/10 text-6xl absolute -right-4 -bottom-4 group-hover:scale-110 transition-transform"></i>
-          <p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Clips Processed</p>
+          <p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Clipes Processados</p>
           <h3 class="text-3xl font-bold text-slate-800">45.2k</h3>
-          <p class="text-[10px] text-blue-600 font-bold mt-2"><i class="fa-solid fa-bolt"></i> Efficiency: 98.2%</p>
+          <p class="text-[10px] text-blue-600 font-bold mt-2"><i class="fa-solid fa-bolt"></i> Eficiência: 98.2%</p>
         </div>
         <div class="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm relative overflow-hidden group">
           <i class="fa-solid fa-briefcase text-orange-500/10 text-6xl absolute -right-4 -bottom-4 group-hover:scale-110 transition-transform"></i>
-          <p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Active Clients</p>
+          <p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Clientes Ativos</p>
           <h3 class="text-3xl font-bold text-slate-800">86</h3>
-          <p class="text-[10px] text-slate-400 font-bold mt-2">Enterprise Tier: 12</p>
+          <p class="text-[10px] text-slate-400 font-bold mt-2">Plano Enterprise: 12</p>
         </div>
       </div>
 
       <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
         <div class="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
           <div class="p-6 border-b border-slate-100 flex justify-between items-center">
-            <h3 class="font-bold text-slate-800">Recent User Registrations</h3>
-            <button class="text-blue-600 text-xs font-bold hover:underline">View All</button>
+            <h3 class="font-bold text-slate-800">Registros Recentes</h3>
+            <button class="text-blue-600 text-xs font-bold hover:underline">Ver Todos</button>
           </div>
           <div class="divide-y divide-slate-50">
             ${[
-              { name: 'John Doe', email: 'john@example.com', date: '2 mins ago', status: 'Active' },
-              { name: 'Alice Smith', email: 'alice@agency.co', date: '15 mins ago', status: 'Pending' },
-              { name: 'Robert Lee', email: 'robert@tech.io', date: '1 hour ago', status: 'Active' },
-              { name: 'Sarah Wilson', email: 'sarah@clipper.com', date: '3 hours ago', status: 'Active' }
+              { name: 'João Silva', email: 'joao@exemplo.com', date: '2 min atrás', status: 'Ativo' },
+              { name: 'Alice Smith', email: 'alice@agency.co', date: '15 min atrás', status: 'Pendente' },
+              { name: 'Roberto Lee', email: 'robert@tech.io', date: '1 hora atrás', status: 'Ativo' },
+              { name: 'Sara Wilson', email: 'sara@clipper.com', date: '3 horas atrás', status: 'Ativo' }
             ].map(user => `
               <div class="p-4 flex items-center gap-4 hover:bg-slate-50 transition-colors">
                 <div class="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center font-bold text-slate-500 text-xs">${user.name[0]}</div>
@@ -1006,7 +1017,7 @@ const App = {
                 </div>
                 <div class="text-right">
                   <div class="text-[10px] font-bold text-slate-500 mb-1">${user.date}</div>
-                  <span class="text-[8px] font-bold uppercase px-1.5 py-0.5 rounded ${user.status === 'Active' ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'}">${user.status}</span>
+                  <span class="text-[8px] font-bold uppercase px-1.5 py-0.5 rounded ${user.status === 'Ativo' ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'}">${user.status}</span>
                 </div>
               </div>
             `).join('')}
@@ -1015,13 +1026,13 @@ const App = {
 
         <div class="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
            <div class="p-6 border-b border-slate-100">
-             <h3 class="font-bold text-slate-800">Content Overview (Global)</h3>
+             <h3 class="font-bold text-slate-800">Visão Geral de Conteúdo (Global)</h3>
            </div>
            <div class="p-6">
               <div class="space-y-4">
                 <div>
                   <div class="flex justify-between text-[10px] font-bold text-slate-500 uppercase mb-2">
-                    <span>TikTok Engagement</span>
+                    <span>Engajamento TikTok</span>
                     <span>84%</span>
                   </div>
                   <div class="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
@@ -1030,7 +1041,7 @@ const App = {
                 </div>
                 <div>
                   <div class="flex justify-between text-[10px] font-bold text-slate-500 uppercase mb-2">
-                    <span>Instagram Growth</span>
+                    <span>Crescimento Instagram</span>
                     <span>62%</span>
                   </div>
                   <div class="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
@@ -1039,7 +1050,7 @@ const App = {
                 </div>
                 <div>
                   <div class="flex justify-between text-[10px] font-bold text-slate-500 uppercase mb-2">
-                    <span>YouTube Retention</span>
+                    <span>Retenção YouTube</span>
                     <span>45%</span>
                   </div>
                   <div class="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
@@ -1050,7 +1061,7 @@ const App = {
 
               <div class="mt-8 pt-6 border-t border-slate-100 text-center">
                 <button class="bg-slate-900 text-white text-xs font-bold px-6 py-3 rounded-xl shadow-lg hover:shadow-slate-900/20 transition-all flex items-center justify-center gap-2 mx-auto">
-                  <i class="fa-solid fa-file-export"></i> Download Global Audit Report
+                  <i class="fa-solid fa-file-export"></i> Baixar Relatório de Auditoria Global
                 </button>
               </div>
            </div>
@@ -1064,27 +1075,27 @@ const App = {
     // Enabled state (using the Supabase Edge Function Proxy)
     const tools = [
       { id: 'hooks', label: '🎣 Hooks' },
-      { id: 'titles', label: '📝 Titles' },
-      { id: 'captions', label: '🏷️ Captions' },
-      { id: 'scripts', label: '🎬 Scripts' },
+      { id: 'titles', label: '📝 Títulos' },
+      { id: 'captions', label: '🏷️ Legendas' },
+      { id: 'scripts', label: '🎬 Roteiros' },
     ];
 
     return `
       <div class="bg-gradient-to-br from-purple-800 via-purple-600 to-pink-500 rounded-3xl p-8 md:p-12 text-white shadow-xl relative overflow-hidden mb-8">
         <i class="fa-solid fa-wand-magic-sparkles absolute -right-4 -bottom-4 text-[150px] opacity-10 transform -rotate-12"></i>
         <h2 class="text-3xl md:text-4xl font-bold mb-3 relative z-10 tracking-tight">AI Studio</h2>
-        <p class="text-purple-100 text-sm md:text-base max-w-lg relative z-10 leading-relaxed">Generate high-retention scripts, magnetic titles, and discover viral angles instantly.</p>
+        <p class="text-purple-100 text-sm md:text-base max-w-lg relative z-10 leading-relaxed">Gere roteiros de alta retenção, títulos magnéticos e descubra ângulos virais instantaneamente.</p>
       </div>
 
       <div class="bg-white rounded-3xl shadow-sm border border-slate-200 p-6 md:p-8">
         <div class="space-y-6">
           <div>
-            <label class="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 ml-1">Topic / Subject</label>
-            <input type="text" id="gemini-topic" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-5 py-4 text-sm focus:ring-2 focus:ring-purple-500 outline-none placeholder:text-slate-400 transition-all" placeholder="E.g.: 3 ways to invest with little money...">
+            <label class="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 ml-1">Tópico / Assunto</label>
+            <input type="text" id="gemini-topic" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-5 py-4 text-sm focus:ring-2 focus:ring-purple-500 outline-none placeholder:text-slate-400 transition-all" placeholder="Ex: 3 formas de investir com pouco dinheiro...">
           </div>
 
           <div>
-            <label class="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 ml-1">What to generate?</label>
+            <label class="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 ml-1">O que gerar?</label>
             <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
               ${tools.map(t => `<button data-action="set-tool" data-tool="${t.id}" class="tool-btn py-3.5 rounded-xl text-sm font-bold border transition-all ${this.state.geminiTool === t.id ? 'bg-purple-100 text-purple-700 border-purple-300 shadow-sm' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'}">${t.label}</button>`).join('')}
             </div>
@@ -1092,7 +1103,7 @@ const App = {
 
           <button id="btn-generate-ai" data-action="generate-ai" class="w-full bg-slate-900 text-white font-bold py-4 rounded-xl shadow-lg shadow-slate-900/20 hover:bg-slate-800 active:scale-[0.98] transition-all mt-2 flex items-center justify-center gap-2">
             <i class="fa-solid fa-bolt text-yellow-400"></i>
-            <span id="ai-btn-text">Generate Content</span>
+            <span id="ai-btn-text">Gerar Conteúdo</span>
             <i id="ai-spinner" class="fa-solid fa-spinner fa-spin hidden"></i>
           </button>
         </div>
@@ -1100,7 +1111,7 @@ const App = {
         <div id="gemini-results" class="mt-8 pt-8 border-t border-slate-100">
           <div class="text-center py-12 px-4 text-slate-400 text-sm border-2 border-dashed border-slate-200 rounded-2xl bg-slate-50">
             <i class="fa-solid fa-robot text-4xl mb-4 text-slate-300"></i>
-            <p>Results will appear here after generation.</p>
+            <p>Os resultados aparecerão aqui após a geração.</p>
           </div>
         </div>
       </div>`;
@@ -1109,50 +1120,63 @@ const App = {
   // ─── Setup / Settings ──────────────────────────────
   getSetupHTML() {
     const c = this.state.config;
+    const isCustomFreq = !['1', '2', '3', '5'].includes(c.frequency);
+
     return `
       <div class="max-w-lg mx-auto fade-in mt-6 md:mt-12 bg-white p-8 rounded-3xl shadow-xl border border-slate-100">
         <div class="text-center mb-8">
           <div class="w-20 h-20 bg-slate-900 text-white rounded-3xl mx-auto flex items-center justify-center text-3xl mb-5 shadow-lg"><i class="fa-solid fa-layer-group"></i></div>
           <h1 class="text-2xl font-bold text-slate-800">Clipper OS</h1>
-          <p class="text-sm text-slate-500 mt-2">Set up your content workspace.</p>
+          <p class="text-sm text-slate-500 mt-2">Configure seu espaço de trabalho.</p>
         </div>
         <div class="space-y-5">
           <div class="grid grid-cols-2 gap-4">
             <div class="col-span-2 md:col-span-1">
-              <label class="block text-xs font-bold text-slate-400 mb-1 uppercase tracking-wider">Project Name</label>
-              <input type="text" id="cfg-channel" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 outline-none focus:border-blue-500 transition" value="${escapeHtml(c.channel)}" placeholder="E.g.: My Brand">
+              <label class="block text-xs font-bold text-slate-400 mb-1 uppercase tracking-wider">Nome do Projeto</label>
+              <input type="text" id="cfg-channel" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 outline-none focus:border-blue-500 transition" value="${escapeHtml(c.channel)}" placeholder="Ex: Minha Marca">
             </div>
             <div class="col-span-2 md:col-span-1">
-              <label class="block text-xs font-bold text-slate-400 mb-1 uppercase tracking-wider">Niche</label>
-              <input type="text" id="cfg-niche" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 outline-none focus:border-blue-500 transition" value="${escapeHtml(c.niche)}" placeholder="E.g.: Finance">
+              <label class="block text-xs font-bold text-slate-400 mb-1 uppercase tracking-wider">Nicho</label>
+              <input type="text" id="cfg-niche" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 outline-none focus:border-blue-500 transition" value="${escapeHtml(c.niche)}" placeholder="Ex: Finanças">
             </div>
           </div>
 
           <div>
-            <label class="block text-xs font-bold text-slate-400 mb-1 uppercase tracking-wider">Daily Target (Posts/Day)</label>
-            <select id="cfg-freq" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 outline-none">
-              <option value="1" ${c.frequency === '1' ? 'selected' : ''}>1 Post per day</option>
-              <option value="2" ${c.frequency === '2' ? 'selected' : ''}>2 Posts per day</option>
-              <option value="3" ${c.frequency === '3' ? 'selected' : ''}>3 Posts per day</option>
-              <option value="5" ${c.frequency === '5' ? 'selected' : ''}>5 Posts per day (Aggressive)</option>
-            </select>
+            <label class="block text-xs font-bold text-slate-400 mb-1 uppercase tracking-wider">Meta Diária (Posts/Dia)</label>
+            <div class="flex gap-2">
+              <select id="cfg-freq" class="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 outline-none" onchange="document.getElementById('custom-freq-wrapper').classList.toggle('hidden', this.value !== 'custom')">
+                <option value="1" ${c.frequency === '1' ? 'selected' : ''}>1 Post por dia</option>
+                <option value="2" ${c.frequency === '2' ? 'selected' : ''}>2 Posts por dia</option>
+                <option value="3" ${c.frequency === '3' ? 'selected' : ''}>3 Posts por dia</option>
+                <option value="5" ${c.frequency === '5' ? 'selected' : ''}>5 Posts por dia (Agressivo)</option>
+                <option value="custom" ${isCustomFreq ? 'selected' : ''}>Personalizado</option>
+              </select>
+              <div id="custom-freq-wrapper" class="${isCustomFreq ? '' : 'hidden'} w-24">
+                <input type="number" id="cfg-freq-custom" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 outline-none" value="${isCustomFreq ? c.frequency : '4'}" min="1" max="24">
+              </div>
+            </div>
           </div>
 
           <div class="border-t border-slate-100 pt-5 mt-5">
-            <h3 class="text-sm font-bold text-slate-800 mb-3"><i class="fa-solid fa-cloud text-blue-500 mr-1"></i> Cloud Folders (Optional)</h3>
+            <h3 class="text-sm font-bold text-slate-800 mb-3"><i class="fa-solid fa-cloud text-blue-500 mr-1"></i> Pastas na Nuvem (Opcional)</h3>
             <div class="grid grid-cols-2 gap-3">
-              ${['Raw', 'Edited', 'Assets', 'Management'].map(p => `
-              <div><label class="block text-[10px] font-bold text-slate-400 mb-1">${p}</label><input type="url" id="cfg-link-${p}" class="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs outline-none" placeholder="Paste link..." value="${escapeHtml(c.cloudLinks[p] || '')}"></div>
+              ${[
+                { id: 'Raw', label: 'Bruto' },
+                { id: 'Edited', label: 'Editado' },
+                { id: 'Assets', label: 'Recursos' },
+                { id: 'Management', label: 'Gestão' }
+              ].map(p => `
+              <div><label class="block text-[10px] font-bold text-slate-400 mb-1">${p.label}</label><input type="url" id="cfg-link-${p.id}" class="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs outline-none" placeholder="Link..." value="${escapeHtml(c.cloudLinks[p.id] || '')}"></div>
               `).join('')}
             </div>
           </div>
 
           <div class="border-t border-slate-100 pt-5 mt-5">
-            <h3 class="text-sm font-bold text-slate-800 mb-3"><i class="fa-solid fa-bell text-amber-500 mr-1"></i> Notifications</h3>
+            <h3 class="text-sm font-bold text-slate-800 mb-3"><i class="fa-solid fa-bell text-amber-500 mr-1"></i> Notificações</h3>
             <div class="flex items-center justify-between bg-slate-50 rounded-xl px-4 py-3 border border-slate-200">
               <div>
-                <div class="text-sm font-semibold text-slate-700">Enable posting reminders</div>
-                <div class="text-xs text-slate-400 mt-0.5">Get reminded 15 minutes before each scheduled post</div>
+                <div class="text-sm font-semibold text-slate-700">Lembretes de postagem</div>
+                <div class="text-xs text-slate-400 mt-0.5">Lembrete 15 minutos antes de cada post agendado</div>
               </div>
               <button id="btn-toggle-notifications" data-action="toggle-notifications"
                 class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${c.notificationsEnabled ? 'bg-blue-600' : 'bg-slate-300'}">
@@ -1162,11 +1186,11 @@ const App = {
           </div>
 
           <div class="border-t border-slate-100 pt-5 mt-5">
-            <h3 class="text-sm font-bold text-slate-800 mb-3"><i class="fa-solid fa-calendar-days text-green-500 mr-1"></i> Calendar</h3>
+            <h3 class="text-sm font-bold text-slate-800 mb-3"><i class="fa-solid fa-calendar-days text-green-500 mr-1"></i> Calendário</h3>
             <div class="flex items-center justify-between bg-slate-50 rounded-xl px-4 py-3 border border-slate-200">
               <div>
-                <div class="text-sm font-semibold text-slate-700">Auto-add to calendar when scheduling</div>
-                <div class="text-xs text-slate-400 mt-0.5">Each new scheduled slot is automatically added to your calendar</div>
+                <div class="text-sm font-semibold text-slate-700">Auto-adicionar ao calendário</div>
+                <div class="text-xs text-slate-400 mt-0.5">Adiciona automaticamente eventos ao agendar</div>
               </div>
               <button id="btn-toggle-calendar" data-action="toggle-calendar"
                 class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${c.calendarAutoAdd ? 'bg-blue-600' : 'bg-slate-300'}">
@@ -1176,27 +1200,27 @@ const App = {
           </div>
 
           <div class="border-t border-slate-100 pt-5 mt-5">
-            <h3 class="text-sm font-bold text-slate-800 mb-3"><i class="fa-solid fa-cloud-arrow-up text-purple-500 mr-1"></i> Cloud Sync</h3>
+            <h3 class="text-sm font-bold text-slate-800 mb-3"><i class="fa-solid fa-cloud-arrow-up text-purple-500 mr-1"></i> Sincronização em Nuvem</h3>
             ${SyncManager.enabled
               ? `<div class="space-y-3">
                    <div class="bg-slate-50 rounded-xl px-4 py-3 border border-slate-200">
-                     <div class="text-[10px] font-bold text-slate-400 uppercase mb-1">Your Sync ID</div>
+                     <div class="text-[10px] font-bold text-slate-400 uppercase mb-1">Seu ID de Sincronização</div>
                      <div class="flex items-center gap-2">
                        <code class="text-xs text-slate-700 flex-1 truncate bg-white border border-slate-200 rounded-lg px-3 py-2">${escapeHtml(SyncManager.userId || '')}</code>
-                       <button data-action="copy-sync-id" class="text-xs bg-blue-600 text-white font-bold px-3 py-2 rounded-lg hover:bg-blue-700 transition-colors whitespace-nowrap">Copy ID</button>
+                       <button data-action="copy-sync-id" class="text-xs bg-blue-600 text-white font-bold px-3 py-2 rounded-lg hover:bg-blue-700 transition-colors whitespace-nowrap">Copiar ID</button>
                      </div>
                    </div>
-                   <p class="text-xs text-slate-400 text-center">Your data is automatically synced when Supabase is configured</p>
+                   <p class="text-xs text-slate-400 text-center">Seus dados são sincronizados automaticamente quando o Supabase está configurado</p>
                  </div>`
               : `<div class="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 text-center">
-                   <p class="text-sm text-amber-700 font-medium">Configure Supabase in <code class="bg-amber-100 px-1 rounded">.env</code> to enable sync</p>
-                   <p class="text-xs text-amber-500 mt-1">See <code class="bg-amber-100 px-1 rounded">docs/supabase-setup.md</code> for instructions</p>
+                   <p class="text-sm text-amber-700 font-medium">Configure o Supabase no arquivo <code class="bg-amber-100 px-1 rounded">.env</code> para habilitar</p>
+                   <p class="text-xs text-amber-50 mt-1">Veja <code class="bg-amber-100 px-1 rounded">docs/supabase-setup.md</code> para instruções</p>
                  </div>`
             }
           </div>
 
-          <button id="btn-save-setup" class="w-full bg-blue-600 text-white font-bold py-4 rounded-xl mt-6 shadow-md hover:bg-blue-700 active:scale-[0.98] transition-all">Save & Enter</button>
-          ${c.channel ? `<button id="btn-reset" class="w-full text-slate-400 text-xs font-semibold py-2 mt-2 hover:text-red-500 transition-colors">Reset all data</button>` : ''}
+          <button id="btn-save-setup" class="w-full bg-blue-600 text-white font-bold py-4 rounded-xl mt-6 shadow-md hover:bg-blue-700 active:scale-[0.98] transition-all">Salvar e Entrar</button>
+          ${c.channel ? `<button id="btn-reset" class="w-full text-slate-400 text-xs font-semibold py-2 mt-2 hover:text-red-500 transition-colors">Resetar todos os dados</button>` : ''}
         </div>
       </div>`;
   },
@@ -1265,11 +1289,17 @@ const App = {
 
   saveSetup() {
     const channel = document.getElementById('cfg-channel')?.value.trim();
-    if (!channel) return this.showToast('Project name is required.', 'error');
+    if (!channel) return this.showToast('O nome do projeto é obrigatório.', 'error');
 
     this.state.config.channel = channel;
     this.state.config.niche = document.getElementById('cfg-niche')?.value || '';
-    this.state.config.frequency = document.getElementById('cfg-freq')?.value || '2';
+
+    const freqSelect = document.getElementById('cfg-freq');
+    if (freqSelect?.value === 'custom') {
+      this.state.config.frequency = document.getElementById('cfg-freq-custom')?.value || '1';
+    } else {
+      this.state.config.frequency = freqSelect?.value || '2';
+    }
 
     ['Raw', 'Edited', 'Assets', 'Management'].forEach(p => {
       this.state.config.cloudLinks[p] = document.getElementById(`cfg-link-${p}`)?.value || '';
@@ -1277,11 +1307,11 @@ const App = {
 
     this.ensureTodaySlots();
     this.changeView('dashboard');
-    this.showToast('Settings saved!', 'success');
+    this.showToast('Configurações salvas!', 'success');
   },
 
   resetData() {
-    if (confirm('WARNING: This will delete ALL data (history, library, clips, settings). Continue?')) {
+    if (confirm('AVISO: Isso apagará TODOS os dados (histórico, biblioteca, clipes, configurações). Continuar?')) {
       localStorage.removeItem(STORAGE_KEY);
       localStorage.removeItem('clipper_os_data');
       location.reload();
@@ -1290,9 +1320,22 @@ const App = {
 
   ensureTodaySlots() {
     const freq = parseInt(this.state.config.frequency) || 2;
-    const times = freq === 1 ? ['18:00'] : freq === 2 ? ['11:30', '18:30'] : freq === 3 ? ['11:00', '14:30', '19:00'] : ['10:00', '13:00', '17:00', '20:00'];
-    const today = todayStr();
+    let times = [];
 
+    if (freq === 1) times = ['18:00'];
+    else if (freq === 2) times = ['11:30', '18:30'];
+    else if (freq === 3) times = ['11:00', '14:30', '19:00'];
+    else {
+      // Distribuição genérica entre 09:00 e 21:00
+      for (let i = 0; i < freq; i++) {
+        const totalMinutes = 540 + Math.floor((720 / (freq - 1 || 1)) * i);
+        const h = Math.floor(totalMinutes / 60);
+        const m = Math.floor((totalMinutes % 60) / 5) * 5; // Round to 5 mins
+        times.push(`${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`);
+      }
+    }
+
+    const today = todayStr();
     if (!this.state.routine.some(r => r.date === today)) {
       times.forEach(t => {
         this.state.routine.push({
@@ -1307,30 +1350,30 @@ const App = {
   openAddLibraryModal() {
     const body = `
       <div class="space-y-4">
-        <div><label class="block text-xs font-bold text-slate-400 mb-1">Title</label>
+        <div><label class="block text-xs font-bold text-slate-400 mb-1">Título</label>
         <input type="text" id="lib-title" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-blue-500"></div>
 
         <div class="grid grid-cols-2 gap-3">
-          <div><label class="block text-xs font-bold text-slate-400 mb-1">Format</label>
-          <select id="lib-type" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm outline-none"><option>Short Video</option><option>Long Video</option><option>Carousel / Image</option></select></div>
-          <div><label class="block text-xs font-bold text-slate-400 mb-1">Team Member</label>
+          <div><label class="block text-xs font-bold text-slate-400 mb-1">Formato</label>
+          <select id="lib-type" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm outline-none"><option>Vídeo Curto</option><option>Vídeo Longo</option><option>Carrossel / Imagem</option></select></div>
+          <div><label class="block text-xs font-bold text-slate-400 mb-1">Equipe</label>
           <input type="text" id="lib-team" value="${escapeHtml(this.state.config.team)}" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm outline-none"></div>
         </div>
 
-        <div><label class="block text-xs font-bold text-slate-400 mb-1">Tags (comma-separated)</label>
-        <input type="text" id="lib-tags" placeholder="e.g.: viral, sales, tutorial" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm outline-none"></div>
+        <div><label class="block text-xs font-bold text-slate-400 mb-1">Tags (separadas por vírgula)</label>
+        <input type="text" id="lib-tags" placeholder="ex: viral, vendas, tutorial" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm outline-none"></div>
 
-        <div><label class="block text-xs font-bold text-slate-400 mb-1">Cloud Link (Optional)</label>
+        <div><label class="block text-xs font-bold text-slate-400 mb-1">Link na Nuvem (Opcional)</label>
         <input type="url" id="lib-link" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm outline-none"></div>
       </div>`;
-    const footer = `<button id="btn-save-lib" class="w-full bg-blue-600 text-white font-bold py-3.5 rounded-xl shadow-md">Save to Library</button>`;
-    this.openModal('New Content', body, footer);
+    const footer = `<button id="btn-save-lib" class="w-full bg-blue-600 text-white font-bold py-3.5 rounded-xl shadow-md">Salvar na Biblioteca</button>`;
+    this.openModal('Novo Conteúdo', body, footer);
     document.getElementById('btn-save-lib')?.addEventListener('click', () => this.saveLibraryItem());
   },
 
   saveLibraryItem() {
     const title = document.getElementById('lib-title')?.value.trim();
-    if (!title) return this.showToast('Title is required.', 'error');
+    if (!title) return this.showToast('O título é obrigatório.', 'error');
 
     const tagsRaw = document.getElementById('lib-tags')?.value || '';
     const tags = tagsRaw.split(',').map(t => t.trim().toLowerCase()).filter(t => t);
@@ -1338,7 +1381,7 @@ const App = {
     this.state.library.unshift({
       id: generateId(),
       title,
-      type: document.getElementById('lib-type')?.value || 'Short Video',
+      type: document.getElementById('lib-type')?.value || 'Vídeo Curto',
       tags,
       link: document.getElementById('lib-link')?.value || '',
       team: document.getElementById('lib-team')?.value || '',
@@ -1347,11 +1390,11 @@ const App = {
     saveState(this.state);
     this.closeModal();
     this.render();
-    this.showToast('Content saved to library!', 'success');
+    this.showToast('Conteúdo salvo na biblioteca!', 'success');
   },
 
   deleteLibraryItem(id) {
-    if (!confirm('Delete this item permanently?')) return;
+    if (!confirm('Excluir este item permanentemente?')) return;
     this.state.library = this.state.library.filter(i => i.id !== id);
     this.state.routine.forEach(r => { if (r.assetId === id) { r.assetId = null; r.source = null; } });
     saveState(this.state);
@@ -1363,34 +1406,34 @@ const App = {
     const platOptions = PLATFORMS.map(p => `<option value="${p}">${p}</option>`).join('');
     const body = `
       <div class="space-y-4">
-        <div><label class="block text-xs font-bold text-slate-400 mb-1">Clip Title</label>
+        <div><label class="block text-xs font-bold text-slate-400 mb-1">Título do Clipe</label>
         <input type="text" id="clip-title" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-amber-500"></div>
 
         <div class="grid grid-cols-2 gap-3">
-          <div><label class="block text-xs font-bold text-slate-400 mb-1">Start Time</label>
+          <div><label class="block text-xs font-bold text-slate-400 mb-1">Início</label>
           <input type="text" id="clip-in" placeholder="00:00" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm outline-none text-center"></div>
-          <div><label class="block text-xs font-bold text-slate-400 mb-1">End Time</label>
+          <div><label class="block text-xs font-bold text-slate-400 mb-1">Fim</label>
           <input type="text" id="clip-out" placeholder="00:00" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm outline-none text-center"></div>
         </div>
 
-        <div><label class="block text-xs font-bold text-slate-400 mb-1">Hook (First 3 seconds)</label>
+        <div><label class="block text-xs font-bold text-slate-400 mb-1">Gancho (Primeiros 3 segundos)</label>
         <textarea id="clip-hook" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm outline-none h-16 resize-none"></textarea></div>
 
         <div class="grid grid-cols-2 gap-3">
-          <div><label class="block text-xs font-bold text-slate-400 mb-1">Target Platform</label>
+          <div><label class="block text-xs font-bold text-slate-400 mb-1">Plataforma Alvo</label>
           <select id="clip-plat" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-3 text-xs outline-none">${platOptions}</select></div>
           <div><label class="block text-xs font-bold text-slate-400 mb-1">CTA</label>
-          <input type="text" id="clip-cta" placeholder="Follow for more..." class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-3 text-xs outline-none"></div>
+          <input type="text" id="clip-cta" placeholder="Siga para mais..." class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-3 text-xs outline-none"></div>
         </div>
       </div>`;
-    const footer = `<button id="btn-save-clip" class="w-full bg-slate-900 text-white font-bold py-3.5 rounded-xl shadow-md">Save Clip</button>`;
-    this.openModal('New Clip', body, footer);
+    const footer = `<button id="btn-save-clip" class="w-full bg-slate-900 text-white font-bold py-3.5 rounded-xl shadow-md">Salvar Clipe</button>`;
+    this.openModal('Novo Clipe', body, footer);
     document.getElementById('btn-save-clip')?.addEventListener('click', () => this.saveClip());
   },
 
   saveClip() {
     const title = document.getElementById('clip-title')?.value.trim();
-    if (!title) return this.showToast('Title is required.', 'error');
+    if (!title) return this.showToast('O título é obrigatório.', 'error');
 
     this.state.clips.unshift({
       id: generateId(),
@@ -1406,7 +1449,7 @@ const App = {
     saveState(this.state);
     this.closeModal();
     this.render();
-    this.showToast('Clip added to queue!', 'success');
+    this.showToast('Clipe adicionado à fila!', 'success');
   },
 
   cycleClipStatus(id) {
@@ -1416,12 +1459,12 @@ const App = {
     clip.status = cycle[clip.status] || 'raw';
     saveState(this.state);
     this.render();
-    const labels = { raw: 'Raw', editing: 'Editing', approved: 'Approved' };
-    this.showToast(`Moved to: ${labels[clip.status] || clip.status}`, 'info');
+    const labels = { raw: 'Bruto', editing: 'Editando', approved: 'Aprovado' };
+    this.showToast(`Movido para: ${labels[clip.status] || clip.status}`, 'info');
   },
 
   deleteClip(id) {
-    if (!confirm('Delete this clip?')) return;
+    if (!confirm('Excluir este clipe?')) return;
     this.state.clips = this.state.clips.filter(c => c.id !== id);
     this.state.routine.forEach(r => { if (r.assetId === id) { r.assetId = null; r.source = null; } });
     saveState(this.state);
@@ -1443,18 +1486,18 @@ const App = {
         <input type="hidden" id="sched-asset" value="${assetId}">
         <input type="hidden" id="sched-source" value="${source}">
 
-        <div><label class="block text-xs font-bold text-slate-400 mb-1">Publish Date</label>
+        <div><label class="block text-xs font-bold text-slate-400 mb-1">Data de Publicação</label>
         <input type="date" id="sched-date" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-blue-500" value="${defaultDate}"></div>
 
         <div class="grid grid-cols-2 gap-3">
-          <div><label class="block text-xs font-bold text-slate-400 mb-1">Time</label>
+          <div><label class="block text-xs font-bold text-slate-400 mb-1">Horário</label>
           <input type="time" id="sched-time" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm outline-none" value="12:00"></div>
-          <div><label class="block text-xs font-bold text-slate-400 mb-1">Platform</label>
+          <div><label class="block text-xs font-bold text-slate-400 mb-1">Plataforma</label>
           <select id="sched-plat" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-3 text-sm outline-none">${platOptions}</select></div>
         </div>
       </div>`;
-    const footer = `<button id="btn-save-schedule" class="w-full bg-blue-600 text-white font-bold py-3.5 rounded-xl shadow-md">Confirm Schedule</button>`;
-    this.openModal('Schedule Content', body, footer);
+    const footer = `<button id="btn-save-schedule" class="w-full bg-blue-600 text-white font-bold py-3.5 rounded-xl shadow-md">Confirmar Agendamento</button>`;
+    this.openModal('Agendar Conteúdo', body, footer);
     document.getElementById('btn-save-schedule')?.addEventListener('click', () => this.saveSchedule());
   },
 
@@ -1465,7 +1508,7 @@ const App = {
     const time = document.getElementById('sched-time')?.value;
     const platform = document.getElementById('sched-plat')?.value;
 
-    if (!date || !time) return this.showToast('Date and time are required.', 'error');
+    if (!date || !time) return this.showToast('Data e hora são obrigatórios.', 'error');
 
     const slot = { id: generateId(), date, time, platform, assetId, source, isPosted: false };
     this.state.routine.push(slot);
@@ -1474,7 +1517,7 @@ const App = {
     saveState(this.state);
     this.closeModal();
     this.changeView('pipeline');
-    this.showToast('Content scheduled!', 'success');
+    this.showToast('Conteúdo agendado!', 'success');
 
     // Schedule local notification if enabled
     if (this.state.config.notificationsEnabled && assetId) {
@@ -1491,7 +1534,7 @@ const App = {
 
   addEmptySlot(date) {
     this.state.routine.push({
-      id: generateId(), date, time: '12:00', platform: 'Pending', assetId: null, source: null, isPosted: false,
+      id: generateId(), date, time: '12:00', platform: 'Pendente', assetId: null, source: null, isPosted: false,
     });
     saveState(this.state);
     this.render();
@@ -1529,7 +1572,7 @@ const App = {
       assetId: asset.id,
       title: asset.title,
       platform: slot.platform,
-      category: asset.type || 'Clip',
+      category: asset.type || 'Clipe',
       postedAt: new Date().toISOString(),
       performance: 'Pending',
       link: asset.link || '',
@@ -1538,12 +1581,9 @@ const App = {
     slot.isPosted = true;
     NotificationManager.cancelForSlot(slotId);
 
-    // Auto-remove scheduled slot from calendar could be complex,
-    // we keep it but it's now marked as posted in app.
-
     saveState(this.state);
     this.render();
-    this.showToast('Published! 🚀 Progress updated.', 'success');
+    this.showToast('Publicado! 🚀 Progresso atualizado.', 'success');
   },
 
   updatePerformance(historyId, val) {
@@ -1562,14 +1602,14 @@ const App = {
       id: generateId(),
       title: `[REPOST] ${h.title}`,
       type: h.category,
-      tags: ['reusable'],
+      tags: ['reutilizável'],
       link: h.link || '',
       team: this.state.config.team,
       createdAt: Date.now(),
     });
 
     saveState(this.state);
-    this.showToast('Content copied to Library for reuse.', 'success');
+    this.showToast('Conteúdo copiado para a biblioteca para reuso.', 'success');
   },
 
   // ─── Calendar / Notification Actions ────────────────
@@ -1577,23 +1617,23 @@ const App = {
     const slot = this.state.routine.find(r => r.id === slotId);
     if (!slot) return;
     const asset = this.findAsset(slot.assetId, slot.source);
-    const title = asset ? asset.title : 'Scheduled Post';
+    const title = asset ? asset.title : 'Post Agendado';
 
     const body = `
       <div class="space-y-3 py-2">
-        <p class="text-sm text-slate-600">Add <strong>${escapeHtml(title)}</strong> on <strong>${escapeHtml(slot.date)}</strong> at <strong>${escapeHtml(slot.time)}</strong> to your calendar.</p>
+        <p class="text-sm text-slate-600">Adicionar <strong>${escapeHtml(title)}</strong> em <strong>${escapeHtml(slot.date)}</strong> às <strong>${escapeHtml(slot.time)}</strong> ao seu calendário.</p>
         <button data-action="cal-native" data-id="${slotId}" class="w-full flex items-center gap-3 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-xl px-4 py-3 text-sm font-bold text-slate-700 transition-colors">
-          <i class="fa-solid fa-mobile-screen text-blue-500 text-base w-5 text-center"></i> Add to Device Calendar
+          <i class="fa-solid fa-mobile-screen text-blue-500 text-base w-5 text-center"></i> Adicionar ao Calendário do Dispositivo
         </button>
         <button data-action="cal-google" data-id="${slotId}" class="w-full flex items-center gap-3 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-xl px-4 py-3 text-sm font-bold text-slate-700 transition-colors">
-          <i class="fa-brands fa-google text-red-500 text-base w-5 text-center"></i> Add to Google Calendar
+          <i class="fa-brands fa-google text-red-500 text-base w-5 text-center"></i> Adicionar ao Google Calendar
         </button>
         <button data-action="cal-ics" data-id="${slotId}" class="w-full flex items-center gap-3 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-xl px-4 py-3 text-sm font-bold text-slate-700 transition-colors">
-          <i class="fa-solid fa-file-arrow-down text-green-500 text-base w-5 text-center"></i> Download .ics file
+          <i class="fa-solid fa-file-arrow-down text-green-500 text-base w-5 text-center"></i> Baixar arquivo .ics
         </button>
       </div>`;
 
-    this.openModal('Add to Calendar', body, '');
+    this.openModal('Adicionar ao Calendário', body, '');
 
     // Bind calendar modal buttons
     const modalBody = document.getElementById('modal-body');
@@ -1605,7 +1645,7 @@ const App = {
       if (action === 'cal-native') {
         CalendarManager.addEvent(slot, title).then(r => {
           this.closeModal();
-          this.showToast(r.method === 'native' ? 'Added to device calendar!' : 'Opened Google Calendar', 'success');
+          this.showToast(r.method === 'native' ? 'Adicionado ao calendário!' : 'Google Calendar aberto', 'success');
         });
       } else if (action === 'cal-google') {
         CalendarManager.openGoogleCalendar(slot, title);
@@ -1613,7 +1653,7 @@ const App = {
       } else if (action === 'cal-ics') {
         CalendarManager.downloadICS([slot], [...this.state.library, ...this.state.clips]);
         this.closeModal();
-        this.showToast('Calendar file downloaded!', 'success');
+        this.showToast('Arquivo de calendário baixado!', 'success');
       }
     }, { once: true });
   },
@@ -1622,11 +1662,11 @@ const App = {
     const allAssets = [...this.state.library, ...this.state.clips];
     const upcomingSlots = this.state.routine.filter(r => !r.isPosted && r.assetId);
     if (upcomingSlots.length === 0) {
-      this.showToast('No scheduled posts to export.', 'warning');
+      this.showToast('Nenhum post agendado para exportar.', 'warning');
       return;
     }
     CalendarManager.downloadICS(upcomingSlots, allAssets);
-    this.showToast('Calendar exported!', 'success');
+    this.showToast('Calendário exportado!', 'success');
   },
 
   async toggleNotifications() {
@@ -1634,14 +1674,14 @@ const App = {
       const granted = await NotificationManager.requestPermission();
       this.state.config.notificationsEnabled = granted;
       if (!granted) {
-        this.showToast('Notification permission denied.', 'warning');
+        this.showToast('Permissão de notificação negada.', 'warning');
       } else {
-        this.showToast('Reminders enabled!', 'success');
+        this.showToast('Lembretes ativados!', 'success');
       }
     } else {
       this.state.config.notificationsEnabled = false;
       await NotificationManager.cancelAll();
-      this.showToast('Reminders disabled.', 'info');
+      this.showToast('Lembretes desativados.', 'info');
     }
     saveState(this.state);
     this.render();
@@ -1650,7 +1690,7 @@ const App = {
   toggleCalendarAutoAdd() {
     this.state.config.calendarAutoAdd = !this.state.config.calendarAutoAdd;
     saveState(this.state);
-    this.showToast(this.state.config.calendarAutoAdd ? 'Auto calendar enabled!' : 'Auto calendar disabled.', 'info');
+    this.showToast(this.state.config.calendarAutoAdd ? 'Auto-calendário ativado!' : 'Auto-calendário desativado.', 'info');
     this.render();
   },
 
@@ -1658,9 +1698,9 @@ const App = {
     const id = SyncManager.userId || '';
     if (!id) return;
     navigator.clipboard.writeText(id).then(() => {
-      this.showToast('Sync ID copied to clipboard!', 'success');
+      this.showToast('ID de sincronização copiado!', 'success');
     }).catch(() => {
-      this.showToast('Could not copy ID.', 'error');
+      this.showToast('Não foi possível copiar o ID.', 'error');
     });
   },
 
@@ -1675,7 +1715,7 @@ const App = {
 
   async generateWithAI() {
     const topic = document.getElementById('gemini-topic')?.value.trim();
-    if (!topic) return this.showToast('Please enter a topic.', 'warning');
+    if (!topic) return this.showToast('Por favor, insira um tópico.', 'warning');
 
     const resultsDiv = document.getElementById('gemini-results');
     const btn = document.getElementById('btn-generate-ai');
@@ -1683,26 +1723,26 @@ const App = {
     const btnText = document.getElementById('ai-btn-text');
 
     if (!SyncManager.client) {
-      return this.showToast('Supabase not configured. AI requires a proxy.', 'error');
+      return this.showToast('Supabase não configurado. AI requer um proxy.', 'error');
     }
 
     // Prepare prompt
     const tool = this.state.geminiTool || 'hooks';
     const prompts = {
-      hooks: `Generate 3 viral hooks for a short video about: ${topic}. Focus on retention and curiosity.`,
-      titles: `Generate 5 click-worthy titles for a video about: ${topic}.`,
-      captions: `Write an engaging caption with hashtags for: ${topic}.`,
-      scripts: `Write a 60-second video script about: ${topic}. Structure: Hook, Value, CTA.`,
+      hooks: `Gere 3 ganchos virais para um vídeo curto sobre: ${topic}. Foque em retenção e curiosidade.`,
+      titles: `Gere 5 títulos chamativos para um vídeo sobre: ${topic}.`,
+      captions: `Escreva uma legenda engajadora com hashtags para: ${topic}.`,
+      scripts: `Escreva um roteiro de 60 segundos sobre: ${topic}. Estrutura: Gancho, Valor, CTA.`,
     };
 
     try {
       // Loading state
       btn.disabled = true;
       spinner.classList.remove('hidden');
-      btnText.textContent = 'Generating...';
+      btnText.textContent = 'Gerando...';
       resultsDiv.innerHTML = `<div class="flex flex-col items-center justify-center py-12 text-purple-500 animate-pulse">
         <i class="fa-solid fa-brain text-4xl mb-4"></i>
-        <p class="text-sm font-bold uppercase tracking-widest">AI is thinking...</p>
+        <p class="text-sm font-bold uppercase tracking-widest">A IA está pensando...</p>
       </div>`;
 
       // Call Supabase Edge Function Proxy
@@ -1713,35 +1753,35 @@ const App = {
       if (error) throw error;
 
       // Parse Gemini response
-      const aiText = data?.candidates?.[0]?.content?.parts?.[0]?.text || "No response from AI.";
+      const aiText = data?.candidates?.[0]?.content?.parts?.[0]?.text || "Sem resposta da IA.";
 
       resultsDiv.innerHTML = `
         <div class="bg-purple-50 border border-purple-100 rounded-2xl p-6 fade-in">
           <div class="flex justify-between items-center mb-4 pb-4 border-b border-purple-100">
-            <h4 class="text-xs font-bold text-purple-700 uppercase tracking-widest"><i class="fa-solid fa-sparkles mr-1"></i> AI Results</h4>
-            <button id="btn-copy-ai" class="text-[10px] font-bold bg-white text-purple-600 border border-purple-200 px-3 py-1.5 rounded-lg hover:bg-purple-100 transition-colors uppercase">Copy Results</button>
+            <h4 class="text-xs font-bold text-purple-700 uppercase tracking-widest"><i class="fa-solid fa-sparkles mr-1"></i> Resultados da IA</h4>
+            <button id="btn-copy-ai" class="text-[10px] font-bold bg-white text-purple-600 border border-purple-200 px-3 py-1.5 rounded-lg hover:bg-purple-100 transition-colors uppercase">Copiar Resultados</button>
           </div>
           <div class="prose prose-sm text-slate-700 whitespace-pre-wrap leading-relaxed">${escapeHtml(aiText)}</div>
         </div>`;
 
       document.getElementById('btn-copy-ai')?.addEventListener('click', () => {
         navigator.clipboard.writeText(aiText);
-        this.showToast('Results copied to clipboard!', 'success');
+        this.showToast('Resultados copiados!', 'success');
       });
 
     } catch (err) {
       console.error('[Gemini] Error:', err);
-      this.showToast('Error generating content. Check proxy logs.', 'error');
+      this.showToast('Erro ao gerar conteúdo. Verifique os logs do proxy.', 'error');
       resultsDiv.innerHTML = `
         <div class="text-center py-6 text-red-500 bg-red-50 rounded-2xl border border-red-200">
           <i class="fa-solid fa-circle-exclamation text-2xl mb-2"></i>
-          <p class="text-sm font-bold">Generation Failed</p>
+          <p class="text-sm font-bold">Falha na Geração</p>
           <p class="text-xs mt-1">${escapeHtml(err.message)}</p>
         </div>`;
     } finally {
       btn.disabled = false;
       spinner.classList.add('hidden');
-      btnText.textContent = 'Generate Content';
+      btnText.textContent = 'Gerar Conteúdo';
     }
   },
 
@@ -1758,7 +1798,7 @@ const App = {
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
-    this.showToast('Export completed!', 'success');
+    this.showToast('Exportação concluída!', 'success');
   },
 
   // ─── Modal ──────────────────────────────────────────
