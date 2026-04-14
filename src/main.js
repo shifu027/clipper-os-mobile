@@ -103,53 +103,68 @@ function initBackground() {
     const lp = lines.geometry.attributes.position.array;
     const lc = lines.geometry.attributes.color.array;
 
-    for (let i = 0; i < MAX_PARTICLES; i++) {
-      const i3 = i * 3;
-      positions[i3] += particleData[i].velocity.x;
-      positions[i3 + 1] += particleData[i].velocity.y;
-      positions[i3 + 2] += particleData[i].velocity.z;
+    // GPU & CPU Throttle: Only process/render if the tab is visible
+    if (!document.hidden) {
+      for (let i = 0; i < MAX_PARTICLES; i++) {
+        const i3 = i * 3;
+        positions[i3] += particleData[i].velocity.x;
+        positions[i3 + 1] += particleData[i].velocity.y;
+        positions[i3 + 2] += particleData[i].velocity.z;
 
-      if (positions[i3] < -400 || positions[i3] > 400) particleData[i].velocity.x *= -1;
-      if (positions[i3+1] < -400 || positions[i3+1] > 400) particleData[i].velocity.y *= -1;
-      if (positions[i3+2] < -400 || positions[i3+2] > 400) particleData[i].velocity.z *= -1;
+        if (positions[i3] < -400 || positions[i3] > 400) particleData[i].velocity.x *= -1;
+        if (positions[i3+1] < -400 || positions[i3+1] > 400) particleData[i].velocity.y *= -1;
+        if (positions[i3+2] < -400 || positions[i3+2] > 400) particleData[i].velocity.z *= -1;
 
-      for (let j = i + 1; j < MAX_PARTICLES; j++) {
-        const j3 = j * 3;
-        const dx = positions[i3] - positions[j3];
-        const dy = positions[i3 + 1] - positions[j3 + 1];
-        const dz = positions[i3 + 2] - positions[j3 + 2];
-        const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
+        for (let j = i + 1; j < MAX_PARTICLES; j++) {
+          const j3 = j * 3;
+          const dx = positions[i3] - positions[j3];
+          const dy = positions[i3 + 1] - positions[j3 + 1];
+          const dz = positions[i3 + 2] - positions[j3 + 2];
+          const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
 
-        if (dist < MAX_DISTANCE) {
-          const alpha = 1.0 - dist / MAX_DISTANCE;
-          lp[vertexIndex++] = positions[i3];
-          lp[vertexIndex++] = positions[i3 + 1];
-          lp[vertexIndex++] = positions[i3 + 2];
-          lp[vertexIndex++] = positions[j3];
-          lp[vertexIndex++] = positions[j3 + 1];
-          lp[vertexIndex++] = positions[j3 + 2];
-          lc[colorIndex++] = alpha * 0.2;
-          lc[colorIndex++] = alpha * 0.5;
-          lc[colorIndex++] = alpha * 0.8;
-          lc[colorIndex++] = alpha * 0.2;
-          lc[colorIndex++] = alpha * 0.5;
-          lc[colorIndex++] = alpha * 0.8;
-          lineCount++;
+          if (dist < MAX_DISTANCE) {
+            const alpha = 1.0 - dist / MAX_DISTANCE;
+            lp[vertexIndex++] = positions[i3];
+            lp[vertexIndex++] = positions[i3 + 1];
+            lp[vertexIndex++] = positions[i3 + 2];
+            lp[vertexIndex++] = positions[j3];
+            lp[vertexIndex++] = positions[j3 + 1];
+            lp[vertexIndex++] = positions[j3 + 2];
+            lc[colorIndex++] = alpha * 0.2;
+            lc[colorIndex++] = alpha * 0.5;
+            lc[colorIndex++] = alpha * 0.8;
+            lc[colorIndex++] = alpha * 0.2;
+            lc[colorIndex++] = alpha * 0.5;
+            lc[colorIndex++] = alpha * 0.8;
+            lineCount++;
+          }
         }
       }
+
+      camera.position.x += (mouse.x * 50 - camera.position.x) * 0.02;
+      camera.position.y += (mouse.y * 50 - camera.position.y) * 0.02;
+      camera.lookAt(scene.position);
+
+      lines.geometry.setDrawRange(0, lineCount * 2);
+      lines.geometry.attributes.position.needsUpdate = true;
+      lines.geometry.attributes.color.needsUpdate = true;
+      particles.geometry.attributes.position.needsUpdate = true;
+      renderer.render(scene, camera);
     }
 
-    camera.position.x += (mouse.x * 50 - camera.position.x) * 0.02;
-    camera.position.y += (mouse.y * 50 - camera.position.y) * 0.02;
-    camera.lookAt(scene.position);
-
-    lines.geometry.setDrawRange(0, lineCount * 2);
-    lines.geometry.attributes.position.needsUpdate = true;
-    lines.geometry.attributes.color.needsUpdate = true;
-    particles.geometry.attributes.position.needsUpdate = true;
-    renderer.render(scene, camera);
-    requestAnimationFrame(render);
+    animationFrameId = requestAnimationFrame(render);
   }
+
+  let animationFrameId;
+  const handleVisibilityChange = () => {
+    if (document.hidden) {
+      cancelAnimationFrame(animationFrameId);
+    } else {
+      render();
+    }
+  };
+
+  document.addEventListener('visibilitychange', handleVisibilityChange);
   render();
 }
 
@@ -190,6 +205,29 @@ const App = {
     // Wire up auth forms before checking session
     setupAuthForms();
 
+    // ── Global Auth Listener ────────────────────────────
+    AuthManager.onAuthStateChange(async (event, session) => {
+      console.log(`[Auth] Event: ${event}`);
+
+      if (event === 'SIGNED_OUT') {
+        SyncManager.reset();
+        showAuthScreen();
+        // Force a UI reset or reload to clear sensitive data
+        location.reload();
+      }
+
+      if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
+        if (session) {
+          hideAuthScreen();
+          // Avoid re-initializing if already in the app
+          const appContent = document.getElementById('app-content');
+          if (appContent && !appContent.innerHTML.trim()) {
+            await this.initApp();
+          }
+        }
+      }
+    });
+
     const session = await AuthManager.getSession();
     if (!session) {
       // No active session — show auth screen, hide app
@@ -203,6 +241,29 @@ const App = {
 
   async initApp() {
     console.log('[App] Initializing content...');
+
+    // ── OAuth Callback Handling ─────────────────────────
+    const urlParams = new URLSearchParams(window.location.search);
+    const code = urlParams.get('code');
+    const provider = urlParams.get('provider');
+
+    if (code && provider) {
+      try {
+        const connector = getConnector(provider);
+        if (connector) {
+          const success = await connector.exchangeToken(code);
+          if (success) {
+            this.showToast(`${provider} conectado com sucesso!`, 'success');
+          }
+        }
+      } catch (err) {
+        console.error('[OAuth] Exchange failed:', err);
+        this.showToast(`Erro ao conectar ${provider}.`, 'error');
+      } finally {
+        // Clean URL to prevent re-exchange on refresh
+        window.history.replaceState({}, document.title, window.location.pathname);
+      }
+    }
 
     const user = AuthManager.getUser();
     if (user) {
@@ -241,6 +302,16 @@ const App = {
       }
       SyncManager.subscribe((newState) => {
         this.state = migrateState({ ...this.state, ...newState });
+
+        // State Management Concurrency Guard
+        const isEditing = ['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement?.tagName);
+        const isModalOpen = !document.getElementById('global-modal')?.classList.contains('hidden');
+
+        if (isEditing || isModalOpen) {
+          console.log('[App] State updated from cloud, but skipping render to preserve user focus/modal.');
+          return;
+        }
+
         this.renderNav();
         this.render();
       });
@@ -1895,6 +1966,14 @@ const App = {
   },
 
   deleteSlot(id) {
+    const slot = this.state.routine.find(r => r.id === id);
+    if (slot && slot.assetId) {
+      const confirmMsg = 'Este slot tem conteúdo agendado. Deseja mesmo excluir o slot e desvincular o conteúdo?';
+      if (!confirm(confirmMsg)) {
+        return;
+      }
+    }
+
     NotificationManager.cancelForSlot(id);
     this.state.routine = this.state.routine.filter(r => r.id !== id);
     saveState(this.state);
@@ -2201,12 +2280,20 @@ const App = {
 
     } catch (err) {
       console.error('[Gemini] Error:', err);
-      this.showToast('Erro ao gerar conteúdo. Verifique os logs do proxy.', 'error');
+
+      let friendlyMessage = 'Erro ao gerar conteúdo. Tente novamente mais tarde.';
+      const errorStr = (err.message || '').toLowerCase();
+
+      if (errorStr.includes('429') || errorStr.includes('rate limit') || errorStr.includes('402') || errorStr.includes('billing') || errorStr.includes('quota')) {
+        friendlyMessage = 'Limite de requisições atingido ou sem créditos na API de IA. Tente novamente mais tarde.';
+      }
+
+      this.showToast(friendlyMessage, 'error');
       resultsDiv.innerHTML = `
         <div class="text-center py-6 text-red-500 bg-red-50 rounded-2xl border border-red-200">
           <i class="fa-solid fa-circle-exclamation text-2xl mb-2"></i>
           <p class="text-sm font-bold">Falha na Geração</p>
-          <p class="text-xs mt-1">${escapeHtml(err.message)}</p>
+          <p class="text-xs mt-1 px-4">${escapeHtml(friendlyMessage)}</p>
         </div>`;
     } finally {
       btn.disabled = false;

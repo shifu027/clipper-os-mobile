@@ -115,7 +115,7 @@ class CloudConnector {
     });
 
     if (error) throw error;
-    return data.success;
+    return data?.success || false;
   }
 }
 
