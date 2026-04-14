@@ -294,6 +294,118 @@ const App = {
     };
     document.getElementById('desktop-nav')?.addEventListener('click', handleNav);
     document.getElementById('mobile-nav')?.addEventListener('click', handleNav);
+
+    // ─── Content Event Delegation ───────────────────────
+    const content = document.getElementById('app-content');
+    if (content) {
+      // Click Delegation
+      content.addEventListener('click', async (e) => {
+        const btn = e.target.closest('[data-action]');
+        if (!btn) return;
+        const action = btn.dataset.action;
+        const id = btn.dataset.id;
+        this.handleAction(action, id, btn);
+      });
+
+      // Change Delegation
+      content.addEventListener('change', (e) => {
+        const sel = e.target.closest('[data-action="set-perf"]');
+        if (sel) this.updatePerformance(sel.dataset.id, sel.value);
+      });
+
+      // Drag-and-Drop Delegation
+      content.addEventListener('dragstart', (e) => {
+        const el = e.target.closest('.draggable-item');
+        if (el) {
+          const item = { id: el.dataset.id, source: el.dataset.source };
+          e.dataTransfer.setData('application/json', JSON.stringify(item));
+          el.classList.add('opacity-50', 'scale-95');
+        }
+      });
+
+      content.addEventListener('dragend', (e) => {
+        const el = e.target.closest('.draggable-item');
+        if (el) el.classList.remove('opacity-50', 'scale-95');
+      });
+
+      content.addEventListener('dragover', (e) => {
+        const zone = e.target.closest('[data-action="attach-content"]');
+        if (zone) {
+          e.preventDefault();
+          const container = zone.closest('.bg-white') || zone;
+          container.classList.add('ring-2', 'ring-blue-500', 'bg-blue-50/50');
+        }
+      });
+
+      content.addEventListener('dragleave', (e) => {
+        const zone = e.target.closest('[data-action="attach-content"]');
+        if (zone) {
+          const container = zone.closest('.bg-white') || zone;
+          container.classList.remove('ring-2', 'ring-blue-500', 'bg-blue-50/50');
+        }
+      });
+
+      content.addEventListener('drop', (e) => {
+        const zone = e.target.closest('[data-action="attach-content"]');
+        if (zone) {
+          e.preventDefault();
+          const container = zone.closest('.bg-white') || zone;
+          container.classList.remove('ring-2', 'ring-blue-500', 'bg-blue-50/50');
+          try {
+            const data = JSON.parse(e.dataTransfer.getData('application/json'));
+            const slotId = zone.dataset.id;
+            if (data.id && slotId) this.attachToSlot(slotId, data.id, data.source);
+          } catch (err) {
+            console.error('[DnD] Drop failed:', err);
+          }
+        }
+      });
+    }
+  },
+
+  handleAction(action, id, btn) {
+    switch (action) {
+      case 'goto-pipeline': this.changeView('pipeline'); break;
+      case 'goto-clipper': this.changeView('clipper'); break;
+      case 'goto-library': this.changeView('library'); break;
+      case 'add-library': this.openAddLibraryModal(); break;
+      case 'add-clip': this.openAddClipModal(); break;
+      case 'delete-lib': this.deleteLibraryItem(id); break;
+      case 'delete-clip': this.deleteClip(id); break;
+      case 'cycle-clip': this.cycleClipStatus(id); break;
+      case 'schedule-asset': this.openScheduleModal(id, btn.dataset.source); break;
+      case 'set-date': this.setFilterDate(btn.dataset.date); break;
+      case 'add-slot': this.addEmptySlot(btn.dataset.date); break;
+      case 'delete-slot': this.deleteSlot(id); break;
+      case 'unschedule': this.unscheduleAsset(id); break;
+      case 'post-slot': this.postScheduledAsset(id); break;
+      case 'reuse-content': this.reuseContent(id); break;
+      case 'set-tool': this.setGeminiTool(btn.dataset.tool); break;
+      case 'generate-ai': this.generateWithAI(); break;
+      case 'add-to-calendar': this.openCalendarModal(id); break;
+      case 'export-calendar': this.exportCalendar(); break;
+      case 'toggle-notifications': this.toggleNotifications(); break;
+      case 'toggle-calendar': this.toggleCalendarAutoAdd(); break;
+      case 'copy-sync-id': this.copySyncId(); break;
+      case 'filter-network': this.setNetworkFilter(btn.dataset.network); break;
+      case 'attach-content': this.openAttachModal(id); break;
+      case 'open-cloud-modal': this.openCloudModal(); break;
+      case 'connect-cloud': this.connectCloud(btn.dataset.provider); break;
+      case 'disconnect-cloud': this.disconnectCloud(btn.dataset.provider); break;
+      case 'preview-video': this.previewVideo(id); break;
+      case 'edit-video': this.editVideo(id); break;
+      case 'attach-to-agenda': this.openScheduleModal(id, 'videoAsset'); break;
+      case 'add-video-manual': this.addVideoManual(); break;
+      case 'save-setup': this.saveSetup(); break;
+      case 'reset-data': this.resetData(); break;
+      case 'filter-videos':
+        this.state.videoFilter = btn.dataset.filter;
+        saveState(this.state);
+        this.render();
+        break;
+      case 'select-folder': this.selectCloudFolder(btn.dataset.provider, btn.dataset.type); break;
+      case 'video-options': this.showVideoOptions(id); break;
+    }
   },
 
   // ─── Navigation ─────────────────────────────────────
@@ -1101,8 +1213,8 @@ const App = {
             }
           </div>
 
-          <button id="btn-save-setup" class="w-full bg-blue-600 text-white font-bold py-4 rounded-xl mt-6 shadow-md hover:bg-blue-700 active:scale-[0.98] transition-all">Salvar e Entrar</button>
-          ${c.channel ? `<button id="btn-reset" class="w-full text-slate-400 text-xs font-semibold py-2 mt-2 hover:text-red-500 transition-colors">Resetar todos os dados</button>` : ''}
+          <button id="btn-save-setup" data-action="save-setup" class="w-full bg-blue-600 text-white font-bold py-4 rounded-xl mt-6 shadow-md hover:bg-blue-700 active:scale-[0.98] transition-all">Salvar e Entrar</button>
+          ${c.channel ? `<button id="btn-reset" data-action="reset-data" class="w-full text-slate-400 text-xs font-semibold py-2 mt-2 hover:text-red-500 transition-colors">Resetar todos os dados</button>` : ''}
         </div>
       </div>`;
   },
@@ -1114,124 +1226,9 @@ const App = {
   },
 
   bindViewEvents() {
-    const content = document.getElementById('app-content');
-    if (!content) return;
-
-    // Drag-and-Drop Support for Pipeline
-    this.setupDragAndDrop();
-
-    content.addEventListener('click', async (e) => {
-      const btn = e.target.closest('[data-action]');
-      if (!btn) return;
-      const action = btn.dataset.action;
-      const id = btn.dataset.id;
-
-      switch (action) {
-        case 'goto-pipeline': this.changeView('pipeline'); break;
-        case 'goto-clipper': this.changeView('clipper'); break;
-        case 'goto-library': this.changeView('library'); break;
-        case 'add-library': this.openAddLibraryModal(); break;
-        case 'add-clip': this.openAddClipModal(); break;
-        case 'delete-lib': this.deleteLibraryItem(id); break;
-        case 'delete-clip': this.deleteClip(id); break;
-        case 'cycle-clip': this.cycleClipStatus(id); break;
-        case 'schedule-asset': this.openScheduleModal(btn.dataset.id, btn.dataset.source); break;
-        case 'set-date': this.setFilterDate(btn.dataset.date); break;
-        case 'add-slot': this.addEmptySlot(btn.dataset.date); break;
-        case 'delete-slot': this.deleteSlot(id); break;
-        case 'unschedule': this.unscheduleAsset(id); break;
-        case 'post-slot': this.postScheduledAsset(id); break;
-        case 'reuse-content': this.reuseContent(id); break;
-        case 'set-tool': this.setGeminiTool(btn.dataset.tool); break;
-        case 'generate-ai': this.generateWithAI(); break;
-        case 'add-to-calendar': this.openCalendarModal(id); break;
-        case 'export-calendar': this.exportCalendar(); break;
-        case 'toggle-notifications': this.toggleNotifications(); break;
-        case 'toggle-calendar': this.toggleCalendarAutoAdd(); break;
-        case 'copy-sync-id': this.copySyncId(); break;
-        case 'filter-network': this.setNetworkFilter(btn.dataset.network); break;
-        case 'attach-content': this.openAttachModal(id); break;
-        case 'open-cloud-modal': this.openCloudModal(); break;
-        case 'connect-cloud': this.connectCloud(btn.dataset.provider); break;
-        case 'disconnect-cloud': this.disconnectCloud(btn.dataset.provider); break;
-        case 'preview-video': this.previewVideo(id); break;
-        case 'edit-video': this.editVideo(id); break;
-        case 'attach-to-agenda': this.openScheduleModal(id, 'videoAsset'); break;
-        case 'add-video-manual': this.addVideoManual(); break;
-        case 'filter-videos':
-          this.state.videoFilter = btn.dataset.filter;
-          saveState(this.state);
-          this.render();
-          break;
-        case 'select-folder': this.selectCloudFolder(btn.dataset.provider, btn.dataset.type); break;
-        case 'video-options': this.showVideoOptions(id); break;
-      }
-    });
-
-    // Performance select change
-    content.addEventListener('change', (e) => {
-      const sel = e.target.closest('[data-action="set-perf"]');
-      if (sel) this.updatePerformance(sel.dataset.id, sel.value);
-    });
-  },
-
-  // ─── Drag-and-Drop ──────────────────────────────────
-  setupDragAndDrop() {
-    if (this.state.currentView !== 'pipeline') return;
-
-    // Remove existing listeners to avoid duplication
-    const pipeline = document.getElementById('pipeline-view');
-    if (pipeline) {
-      const newPipeline = pipeline.cloneNode(true);
-      pipeline.parentNode.replaceChild(newPipeline, pipeline);
-    }
-
-    const draggables = document.querySelectorAll('.draggable-item');
-    const dropzones = document.querySelectorAll('[data-action="attach-content"]');
-
-    draggables.forEach(el => {
-      el.setAttribute('draggable', 'true');
-      el.addEventListener('dragstart', (e) => {
-        const item = {
-          id: el.dataset.id,
-          source: el.dataset.source
-        };
-        e.dataTransfer.setData('application/json', JSON.stringify(item));
-        el.classList.add('opacity-50', 'scale-95');
-      });
-
-      el.addEventListener('dragend', () => {
-        el.classList.remove('opacity-50', 'scale-95');
-      });
-    });
-
-    dropzones.forEach(zone => {
-      const container = zone.closest('.bg-white') || zone;
-
-      container.addEventListener('dragover', (e) => {
-        e.preventDefault();
-        container.classList.add('ring-2', 'ring-blue-500', 'bg-blue-50/50');
-      });
-
-      container.addEventListener('dragleave', () => {
-        container.classList.remove('ring-2', 'ring-blue-500', 'bg-blue-50/50');
-      });
-
-      container.addEventListener('drop', (e) => {
-        e.preventDefault();
-        container.classList.remove('ring-2', 'ring-blue-500', 'bg-blue-50/50');
-
-        try {
-          const data = JSON.parse(e.dataTransfer.getData('application/json'));
-          const slotId = zone.dataset.id;
-          if (data.id && slotId) {
-            this.attachToSlot(slotId, data.id, data.source);
-          }
-        } catch (err) {
-          console.error('[DnD] Drop failed:', err);
-        }
-      });
-    });
+    // Note: Most event bindings are now handled via global delegation in bindGlobalEvents()
+    // to avoid listener accumulation. Only view-specific initialization that doesn't
+    // support delegation should be added here.
   },
 
   // ─── Business Logic ─────────────────────────────────

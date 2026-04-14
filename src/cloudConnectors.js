@@ -24,11 +24,17 @@ class CloudConnector {
     try {
       // 1. Get OAuth URL from Edge Function
       const { data, error } = await SyncManager.client.functions.invoke('cloud-auth', {
-        body: { action: 'get_auth_url', provider: this.provider }
+        body: {
+          action: 'get_auth_url',
+          provider: this.provider,
+          // If you have a specific mobile redirect URI, pass it here
+          // redirect_uri: 'com.clipperos.app://oauth-callback'
+        }
       });
 
       if (error) throw error;
       if (data && data.url) {
+        // For mobile apps (Capacitor), use Browser plugin or deep links
         window.open(data.url, '_blank');
         return true;
       }
@@ -47,15 +53,21 @@ class CloudConnector {
         body: { action: 'list_files', provider: this.provider, folderId }
       });
 
-      if (error) throw error;
+      if (error) {
+         if (error.status === 404 || (error.message && error.message.includes('not connected'))) {
+           console.warn(`[Cloud] ${this.provider} not connected or token missing.`);
+         }
+         throw error;
+      }
 
       return (data.files || []).map(f => ({
         id: f.id,
         title: f.name || f.title,
-        thumbnailUrl: f.thumbnail || f.thumbnailUrl,
+        thumbnailUrl: f.thumbnail || f.thumbnailUrl || 'https://via.placeholder.com/400x225?text=Video',
         duration: f.duration || '00:00',
-        sourceFolder: f.folderName || 'Root',
+        sourceFolder: f.folderName || 'Cloud',
         sourceProvider: this.provider,
+        link: f.link,
         metadata: f.metadata || {}
       }));
     } catch (err) {
@@ -92,6 +104,18 @@ class CloudConnector {
       console.error(`[Cloud] moveFile error:`, err);
       return false;
     }
+  }
+
+  // Helper to exchange code for token after OAuth callback
+  async exchangeToken(code) {
+    if (!SyncManager.client) throw new Error('Supabase client not initialized');
+
+    const { data, error } = await SyncManager.client.functions.invoke('cloud-auth', {
+      body: { action: 'exchange_token', provider: this.provider, code }
+    });
+
+    if (error) throw error;
+    return data.success;
   }
 }
 

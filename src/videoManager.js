@@ -141,7 +141,7 @@ export const VideoManagerUI = {
               </div>
               <div>
                 <div class="text-sm font-bold text-slate-800">${p}</div>
-                <div class="text-[10px] text-slate-400 font-medium">${isEnabled ? \`Conectado\` : 'Desconectado'}</div>
+                <div class="text-[10px] text-slate-400 font-medium">${isEnabled ? 'Conectado' : 'Desconectado'}</div>
               </div>
             </div>
             ${isEnabled
