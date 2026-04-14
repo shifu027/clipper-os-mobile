@@ -376,27 +376,14 @@ const App = {
   async initApp() {
     console.log('[App] Initializing content...');
 
-    // Initialise Supabase sync (no-op when env vars are absent)
-    const syncEnabled = await SyncManager.init();
-
-    if (syncEnabled) {
-      this.syncStatus = 'syncing';
-      const cloudState = await SyncManager.load();
-      if (cloudState) {
-        this.state = migrateState({ ...DEFAULT_STATE, ...cloudState });
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(this.state));
-      }
-      this.syncStatus = 'synced';
-
-      SyncManager.subscribe((newState) => {
-        this.state = migrateState({ ...this.state, ...newState });
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(this.state));
-        this.renderNav();
-        this.render();
-      });
-    }
-
     const user = AuthManager.getUser();
+    if (user) {
+      const userInfoEl = document.getElementById('sidebar-user-info');
+      if (userInfoEl) {
+        userInfoEl.textContent = user.email;
+        userInfoEl.classList.remove('hidden');
+      }
+    }
 
     // Boss Detection
     const BOSS_EMAIL = 'boss@clipperos.com';
@@ -407,22 +394,28 @@ const App = {
       this.views.push({ id: 'admin', icon: 'fa-user-shield', name: 'Admin Hub' });
     }
 
-    // Force setup view if no channel is configured (New User flow)
+    // Force setup view if no channel is configured
     if (!this.state.config.channel) {
       this.state.currentView = 'setup';
     } else {
-      // Ensure we land on a valid view
       const validViews = this.views.map(v => v.id).concat(['setup']);
       if (!validViews.includes(this.state.currentView)) {
         this.state.currentView = 'dashboard';
       }
     }
 
-    // Request notification permission if not yet decided
-    if (this.state.config.notificationsEnabled === undefined) {
-      const granted = await NotificationManager.requestPermission();
-      this.state.config.notificationsEnabled = granted;
-      saveState(this.state);
+    // Initialise Supabase sync
+    const syncEnabled = await SyncManager.init();
+    if (syncEnabled) {
+      const cloudState = await SyncManager.load();
+      if (cloudState) {
+        this.state = migrateState({ ...this.state, ...cloudState });
+      }
+      SyncManager.subscribe((newState) => {
+        this.state = migrateState({ ...this.state, ...newState });
+        this.renderNav();
+        this.render();
+      });
     }
 
     this.bindGlobalEvents();
@@ -442,16 +435,26 @@ const App = {
   bindGlobalEvents() {
     if (this._eventsBound) return;
     this._eventsBound = true;
-    document.getElementById('btn-backup')?.addEventListener('click', () => this.exportDataCSV());
-    document.getElementById('btn-settings')?.addEventListener('click', () => this.editConfig());
-    document.getElementById('btn-settings-mobile')?.addEventListener('click', () => this.editConfig());
-    document.getElementById('modal-backdrop')?.addEventListener('click', () => this.closeModal());
-    document.getElementById('modal-close-btn')?.addEventListener('click', () => this.closeModal());
-    document.getElementById('btn-logout')?.addEventListener('click', async () => {
-      await AuthManager.signOut();
-      SyncManager.reset();
-      showAuthScreen();
-    });
+
+    const safeBind = (id, fn) => {
+      const el = document.getElementById(id);
+      if (el) el.onclick = fn.bind(this);
+    };
+
+    safeBind('btn-backup', this.exportDataCSV);
+    safeBind('btn-settings', this.editConfig);
+    safeBind('btn-settings-mobile', this.editConfig);
+    safeBind('modal-backdrop', this.closeModal);
+    safeBind('modal-close-btn', this.closeModal);
+
+    const logoutBtn = document.getElementById('btn-logout');
+    if (logoutBtn) {
+      logoutBtn.onclick = async () => {
+        await AuthManager.signOut();
+        SyncManager.reset();
+        location.reload(); // Hard reload for clean state
+      };
+    }
   },
 
   // ─── Navigation ─────────────────────────────────────
