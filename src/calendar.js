@@ -77,7 +77,7 @@ export const CalendarManager = {
     for (const slot of slots) {
       if (slot.isPosted) continue;
       const asset = assets.find(a => a.id === slot.assetId);
-      const title = asset ? asset.title : 'Scheduled Post';
+      const title = asset ? (asset.title || asset.name) : 'Scheduled Post';
       const platform = slot.platform || '';
 
       const [year, month, day] = slot.date.split('-').map(Number);

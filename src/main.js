@@ -245,20 +245,21 @@ const App = {
     // ── OAuth Callback Handling ─────────────────────────
     const urlParams = new URLSearchParams(window.location.search);
     const code = urlParams.get('code');
+    const state = urlParams.get('state');
     const provider = urlParams.get('provider');
 
     if (code && provider) {
       try {
         const connector = getConnector(provider);
         if (connector) {
-          const success = await connector.exchangeToken(code);
+          const success = await connector.exchangeToken(code, state);
           if (success) {
             this.showToast(`${provider} conectado com sucesso!`, 'success');
           }
         }
       } catch (err) {
         console.error('[OAuth] Exchange failed:', err);
-        this.showToast(`Erro ao conectar ${provider}.`, 'error');
+        this.showToast(`Erro ao conectar ${provider}: ${err.message}`, 'error');
       } finally {
         // Clean URL to prevent re-exchange on refresh
         window.history.replaceState({}, document.title, window.location.pathname);
@@ -878,7 +879,7 @@ const App = {
       ...this.state.videoAssets.filter(v => v.status === 'pronto' || v.status === 'reutilizar'),
       ...this.state.library,
       ...this.state.clips.filter(c => c.status === 'approved' || c.status === 'aprovado'),
-    ].filter(a => !scheduledAssetIds.has(a.id));
+    ];
 
     const readyHTML = readyContent.length === 0
       ? `<div class="text-xs text-slate-400 text-center py-10 px-4 bg-white/50 rounded-2xl border border-dashed border-slate-200">
@@ -888,17 +889,22 @@ const App = {
       : readyContent.map(item => {
           const isVideo = !!item.thumbnailUrl;
           const source = item.type ? 'library' : (isVideo ? 'videoAsset' : 'clip');
+          const isScheduled = scheduledAssetIds.has(item.id);
+
           return `
-          <div class="bg-white p-3 rounded-2xl shadow-sm border border-slate-200 mb-3 hover:border-blue-400 transition-all group cursor-move draggable-item" draggable="true" data-id="${item.id}" data-source="${source}">
+          <div class="bg-white p-3 rounded-2xl shadow-sm border ${isScheduled ? 'border-amber-200 bg-amber-50/20' : 'border-slate-200'} mb-3 hover:border-blue-400 transition-all group cursor-move draggable-item" draggable="true" data-id="${item.id}" data-source="${source}">
             <div class="flex gap-3 pointer-events-none">
               ${isVideo ? `<img src="${item.thumbnailUrl}" class="w-12 h-12 rounded-lg object-cover bg-slate-100" />` : `<div class="w-12 h-12 rounded-lg bg-slate-100 flex items-center justify-center text-slate-400"><i class="fa-solid fa-file-lines"></i></div>`}
               <div class="flex-1 min-w-0">
-                <div class="text-[9px] font-black text-slate-400 uppercase tracking-tighter mb-0.5">${escapeHtml(item.type || (isVideo ? 'Vídeo' : 'Clipe'))}</div>
+                <div class="flex items-center justify-between mb-0.5">
+                  <div class="text-[9px] font-black text-slate-400 uppercase tracking-tighter">${escapeHtml(item.type || (isVideo ? 'Vídeo' : 'Clipe'))}</div>
+                  ${isScheduled ? `<span class="text-[8px] font-black text-amber-600 bg-amber-100 px-1.5 py-0.5 rounded uppercase tracking-tighter"><i class="fa-solid fa-calendar-check mr-1"></i> Agendado</span>` : ''}
+                </div>
                 <h4 class="text-xs font-bold text-slate-800 leading-tight line-clamp-2">${escapeHtml(item.title)}</h4>
               </div>
             </div>
             <button data-action="schedule-asset" data-id="${item.id}" data-source="${source}" class="w-full mt-3 bg-slate-50 group-hover:bg-blue-600 group-hover:text-white text-slate-500 border border-slate-100 group-hover:border-blue-600 text-[10px] font-black py-2 rounded-xl transition-all uppercase tracking-widest">
-              Agendar
+              Agendar ${isScheduled ? 'Novamente' : ''}
             </button>
           </div>
         `;}).join('');
@@ -1698,10 +1704,17 @@ const App = {
     });
   },
 
-  resetData() {
-    if (confirm('AVISO: Isso apagará TODOS os dados (histórico, biblioteca, clipes, configurações). Continuar?')) {
+  async resetData() {
+    if (confirm('AVISO: Isso apagará TODOS os dados locais e fará logout da sua conta. Deseja continuar com o Limpeza Profunda?')) {
+      try {
+        await AuthManager.signOut();
+        SyncManager.reset();
+      } catch (e) {
+        console.error('Logout error during reset:', e);
+      }
       localStorage.removeItem(STORAGE_KEY);
       localStorage.removeItem('clipper_os_data');
+      sessionStorage.clear();
       location.reload();
     }
   },
@@ -2126,7 +2139,7 @@ const App = {
     const slot = this.state.routine.find(r => r.id === slotId);
     if (!slot) return;
     const asset = this.findAsset(slot.assetId, slot.source);
-    const title = asset ? asset.title : 'Post Agendado';
+    const title = asset ? (asset.title || asset.name) : 'Post Agendado';
 
     const body = `
       <div class="space-y-3 py-2">
@@ -2160,7 +2173,7 @@ const App = {
         CalendarManager.openGoogleCalendar(slot, title);
         this.closeModal();
       } else if (action === 'cal-ics') {
-        CalendarManager.downloadICS([slot], [...this.state.library, ...this.state.clips]);
+        CalendarManager.downloadICS([slot], [...this.state.library, ...this.state.clips, ...this.state.videoAssets]);
         this.closeModal();
         this.showToast('Arquivo de calendário baixado!', 'success');
       }
@@ -2168,7 +2181,7 @@ const App = {
   },
 
   exportCalendar() {
-    const allAssets = [...this.state.library, ...this.state.clips];
+    const allAssets = [...this.state.library, ...this.state.clips, ...this.state.videoAssets];
     const upcomingSlots = this.state.routine.filter(r => !r.isPosted && r.assetId);
     if (upcomingSlots.length === 0) {
       this.showToast('Nenhum post agendado para exportar.', 'warning');
@@ -2411,6 +2424,7 @@ window.switchAuthTab = function(tab) {
   const successScreen = document.getElementById('signup-success-screen');
   const tabLogin = document.getElementById('tab-login');
   const tabSignup = document.getElementById('tab-signup');
+  const tabsContainer = document.querySelector('.flex.bg-slate-100.rounded-xl.p-1.mb-6');
 
   setAuthError('');
   setAuthSuccess('');
@@ -2420,6 +2434,13 @@ window.switchAuthTab = function(tab) {
   signupForm?.classList.add('hidden');
   forgotForm?.classList.add('hidden');
   successScreen?.classList.add('hidden');
+
+  // Ensure tabs are visible unless it's the success screen
+  if (tab === 'success') {
+    tabsContainer?.classList.add('hidden');
+  } else {
+    tabsContainer?.classList.remove('hidden');
+  }
 
   // Reset tab styles
   const activeClasses = ['bg-white', 'text-slate-900', 'shadow-sm'];
@@ -2437,8 +2458,6 @@ window.switchAuthTab = function(tab) {
     tabLogin?.classList.add(...inactiveClasses);
   } else if (tab === 'success') {
     successScreen?.classList.remove('hidden');
-    // Hide tabs when showing success
-    document.querySelector('.flex.bg-slate-100.rounded-xl.p-1.mb-6')?.classList.add('hidden');
   }
 };
 

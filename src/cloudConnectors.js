@@ -22,11 +22,16 @@ class CloudConnector {
     if (!SyncManager.client) throw new Error('Supabase client not initialized');
 
     try {
+      // Generate a random state for CSRF protection
+      const state = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+      localStorage.setItem(`oauth_state_${this.provider}`, state);
+
       // 1. Get OAuth URL from Edge Function
       const { data, error } = await SyncManager.client.functions.invoke('cloud-auth', {
         body: {
           action: 'get_auth_url',
           provider: this.provider,
+          state: state
           // If you have a specific mobile redirect URI, pass it here
           // redirect_uri: 'com.clipperos.app://oauth-callback'
         }
@@ -107,8 +112,16 @@ class CloudConnector {
   }
 
   // Helper to exchange code for token after OAuth callback
-  async exchangeToken(code) {
+  async exchangeToken(code, state) {
     if (!SyncManager.client) throw new Error('Supabase client not initialized');
+
+    // CSRF Validation
+    const savedState = localStorage.getItem(`oauth_state_${this.provider}`);
+    localStorage.removeItem(`oauth_state_${this.provider}`);
+    if (!state || state !== savedState) {
+       console.error(`[OAuth] State mismatch! Expected: ${savedState}, Received: ${state}`);
+       throw new Error('Segurança: Falha na validação do estado (CSRF)');
+    }
 
     const { data, error } = await SyncManager.client.functions.invoke('cloud-auth', {
       body: { action: 'exchange_token', provider: this.provider, code }
