@@ -17,7 +17,7 @@ function pad(n) {
 export const CalendarManager = {
   async requestPermission() {
     try {
-      const { Calendar } = await import('@capacitor-community/calendar');
+      const { Calendar } = await import('@ebarooni/capacitor-calendar');
       const result = await Calendar.requestPermission();
       return result.granted === true;
     } catch {
@@ -33,7 +33,7 @@ export const CalendarManager = {
 
     // Try native Capacitor calendar first
     try {
-      const { Calendar } = await import('@capacitor-community/calendar');
+      const { Calendar } = await import('@ebarooni/capacitor-calendar');
       await Calendar.createEvent({
         title: `⏰ Post: ${assetTitle}`,
         startDate: startDate.getTime(),
