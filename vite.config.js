@@ -2,14 +2,11 @@ import { defineConfig } from 'vite';
 
 export default defineConfig({
   root: '.',
-  base: process.env.GITHUB_PAGES === 'true' ? '/clipper-os-mobile/' : '/',
+  // Automatically detect the base for local or GitHub Pages
+  base: './',
   build: {
     outDir: 'dist',
     emptyOutDir: true,
-    rollupOptions: {
-      // These Capacitor plugins are native modules resolved at runtime by Capacitor
-      external: ['@capacitor-community/calendar'],
-    },
   },
   server: {
     port: 3000,
