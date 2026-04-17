@@ -68,7 +68,7 @@ class CloudConnector {
       return (data.files || []).map(f => ({
         id: f.id,
         title: f.name || f.title,
-        thumbnailUrl: f.thumbnail || f.thumbnailUrl || 'https://via.placeholder.com/400x225?text=Video',
+        thumbnailUrl: f.thumbnail || f.thumbnailUrl || '',
         duration: f.duration || '00:00',
         sourceFolder: f.folderName || 'Cloud',
         sourceProvider: this.provider,

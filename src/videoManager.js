@@ -11,116 +11,198 @@ export const VideoManagerUI = {
       return v.status === activeFilter;
     });
 
-    const videosHTML = filteredVideos.length === 0
-      ? `<div class="col-span-full py-20 text-center text-slate-400 border-2 border-dashed border-slate-200 rounded-3xl bg-white">
-           <i class="fa-solid fa-clapperboard text-6xl mb-4 text-slate-200"></i>
-           <p class="text-lg font-medium text-slate-500">Nenhum vídeo encontrado.</p>
-           <p class="text-sm mt-1">${activeFilter === 'todos' ? 'Conecte uma nuvem ou importe vídeos manualmente.' : 'Tente mudar o filtro ou importar conteúdo.'}</p>
-           ${activeFilter === 'todos' ? '<button data-action="open-cloud-modal" class="mt-6 bg-blue-600 text-white px-6 py-3 rounded-2xl font-bold shadow-lg shadow-blue-600/20 hover:scale-105 transition-transform active:scale-95">Conectar Nuvem</button>' : ''}
-         </div>`
-      : filteredVideos.map(v => this.renderVideoCard(v, state)).join('');
+    // Stats counts
+    const allActive = videos.filter(v => v.status !== 'arquivado');
+    const novos     = allActive.filter(v => v.status === 'novo').length;
+    const prontos   = allActive.filter(v => v.status === 'pronto').length;
+    const publicados = allActive.filter(v => v.status === 'publicado').length;
+    const agendados  = allActive.filter(v => state.routine.some(r => r.assetId === v.id)).length;
 
     const filters = [
-      { id: 'todos', label: 'Todos', icon: 'fa-list' },
-      { id: 'novo', label: 'Novos', icon: 'fa-sparkles' },
-      { id: 'pronto', label: 'Prontos', icon: 'fa-check-double' },
-      { id: 'publicado', label: 'Postados', icon: 'fa-paper-plane' },
+      { id: 'todos',     label: 'Todos',      icon: 'fa-layer-group',  count: allActive.length },
+      { id: 'novo',      label: 'Novos',       icon: 'fa-circle-dot',   count: novos },
+      { id: 'pronto',    label: 'Prontos',     icon: 'fa-circle-check', count: prontos },
+      { id: 'publicado', label: 'Publicados',  icon: 'fa-paper-plane',  count: publicados },
     ];
 
+    const videosHTML = filteredVideos.length === 0
+      ? this.renderEmptyState(activeFilter)
+      : filteredVideos.map(v => this.renderVideoCard(v, state)).join('');
+
     return `
-      <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
-        <div>
-          <h2 class="text-3xl font-bold text-slate-900 tracking-tight">Central de Vídeos</h2>
-          <p class="text-slate-500 text-sm mt-1">Gerencie seus arquivos brutos e editados em um só lugar.</p>
-        </div>
-        <div class="flex gap-2 w-full md:w-auto">
-          <button data-action="open-cloud-modal" class="flex-1 md:flex-none bg-white text-slate-700 border border-slate-200 px-5 py-3 rounded-2xl text-sm font-bold shadow-sm hover:bg-slate-50 transition flex items-center justify-center gap-2">
-            <i class="fa-solid fa-cloud text-blue-500"></i> Conexões
-          </button>
-          <button data-action="add-video-manual" class="flex-1 md:flex-none bg-slate-900 text-white px-5 py-3 rounded-2xl text-sm font-bold shadow-md hover:bg-slate-800 transition flex items-center justify-center gap-2">
-            <i class="fa-solid fa-plus"></i> Importar
-          </button>
-        </div>
-      </div>
+      <div class="vm-container">
 
-      <!-- Filters -->
-      <div class="flex gap-2 mb-8 overflow-x-auto pb-2 hide-scrollbar">
-        ${filters.map(f => `
-          <button data-action="filter-videos" data-filter="${f.id}"
-            class="px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest border transition-all flex items-center gap-2 whitespace-nowrap
-            ${activeFilter === f.id ? 'bg-slate-900 text-white border-slate-900 shadow-lg' : 'bg-white text-slate-500 border-slate-200 hover:border-slate-300'}">
-            <i class="fa-solid ${f.icon} ${activeFilter === f.id ? 'text-blue-400' : 'text-slate-300'}"></i>
-            ${f.label}
-          </button>
-        `).join('')}
-      </div>
+        <!-- ── HEADER ───────────────────────────────────── -->
+        <div class="vm-header">
+          <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px">
+            <div>
+              <div class="vm-eyebrow">
+                <span class="vm-accent-dot"></span>
+                <span class="vm-eyebrow-text">Central de Mídia</span>
+              </div>
+              <h2 class="vm-title">Seus Vídeos</h2>
+              <p class="vm-subtitle">${allActive.length} arquivo${allActive.length !== 1 ? 's' : ''} no vault · Sincronizado</p>
+            </div>
+            <div style="display:flex;gap:8px;flex-shrink:0;padding-top:4px">
+              <button data-action="open-cloud-modal" class="vm-btn-secondary">
+                <i class="fa-solid fa-cloud-arrow-up" style="font-size:10px"></i>
+                <span>Nuvem</span>
+              </button>
+              <button data-action="add-video-manual" class="vm-btn-primary">
+                <i class="fa-solid fa-plus" style="font-size:10px"></i>
+                <span>Importar</span>
+              </button>
+            </div>
+          </div>
 
-      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-        ${videosHTML}
+          <!-- Stats row -->
+          <div class="vm-stats">
+            <div class="vm-stat">
+              <span class="vm-stat-num">${novos}</span>
+              <span class="vm-stat-label">Novos</span>
+            </div>
+            <div class="vm-stat-divider"></div>
+            <div class="vm-stat">
+              <span class="vm-stat-num">${prontos}</span>
+              <span class="vm-stat-label">Prontos</span>
+            </div>
+            <div class="vm-stat-divider"></div>
+            <div class="vm-stat">
+              <span class="vm-stat-num">${publicados}</span>
+              <span class="vm-stat-label">Publicados</span>
+            </div>
+            <div class="vm-stat-divider"></div>
+            <div class="vm-stat">
+              <span class="vm-stat-num">${agendados}</span>
+              <span class="vm-stat-label">Agendados</span>
+            </div>
+          </div>
+
+          <!-- Filter pills -->
+          <div class="vm-filters">
+            ${filters.map(f => `
+              <button data-action="filter-videos" data-filter="${f.id}"
+                class="vm-filter-pill${activeFilter === f.id ? ' vm-filter-active' : ''}">
+                <i class="fa-solid ${f.icon}" style="font-size:9px"></i>
+                ${f.label}
+                <span class="vm-filter-count">${f.count}</span>
+              </button>
+            `).join('')}
+          </div>
+        </div>
+
+        <!-- ── GRID ──────────────────────────────────────── -->
+        <div class="vm-grid">
+          ${videosHTML}
+        </div>
+
       </div>
     `;
   },
 
   renderVideoCard(video, state) {
-    const statusColors = {
-      novo: 'bg-blue-100 text-blue-700 border-blue-200',
-      pronto: 'bg-green-100 text-green-700 border-green-200',
-      agendado: 'bg-purple-100 text-purple-700 border-purple-200',
-      publicado: 'bg-slate-100 text-slate-700 border-slate-200',
-      reutilizar: 'bg-orange-100 text-orange-700 border-orange-200',
-      arquivado: 'bg-slate-50 text-slate-400 border-slate-100'
-    };
-
     const isScheduled = state.routine.some(r => r.assetId === video.id);
 
+    const statusConfig = {
+      novo:      { dot: 'vm-dot-blue',   label: 'Novo' },
+      pronto:    { dot: 'vm-dot-green',  label: 'Pronto' },
+      agendado:  { dot: 'vm-dot-purple', label: 'Agendado' },
+      publicado: { dot: 'vm-dot-slate',  label: 'Publicado' },
+      reutilizar:{ dot: 'vm-dot-amber',  label: 'Reutilizar' },
+      arquivado: { dot: 'vm-dot-slate',  label: 'Arquivado' },
+    };
+
+    const sc = statusConfig[video.status] || statusConfig.novo;
+
+    // Dark fallback SVG thumbnail
+    const thumbFallback = `data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='225' viewBox='0 0 400 225'%3E%3Crect width='400' height='225' fill='%231a1a26'/%3E%3Crect x='170' y='90' width='60' height='45' rx='4' fill='none' stroke='%23312e81' stroke-width='2'/%3E%3Cpolygon points='188,103 188,124 208,113' fill='%234338ca'/%3E%3Ccircle cx='340' cy='185' r='40' fill='%230f0f1a'/%3E%3Ccircle cx='60' cy='40' r='25' fill='%230f0f1a'/%3E%3C/svg%3E`;
+
+    const thumbSrc = video.thumbnailUrl || thumbFallback;
+
     return `
-      <div class="bg-white border border-slate-200 rounded-3xl overflow-hidden shadow-sm hover:shadow-xl transition-all group flex flex-col h-full relative" data-id="${video.id}" data-source="video">
-        <div class="relative aspect-video bg-slate-100 overflow-hidden">
-          <img src="${video.thumbnailUrl || 'https://via.placeholder.com/400x225?text=No+Preview'}" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
-          <div class="absolute inset-0 bg-black/20 group-hover:bg-black/0 transition-colors"></div>
-          <div class="absolute bottom-2 right-2 bg-black/60 backdrop-blur-md text-white text-[10px] font-bold px-2 py-1 rounded-lg">
-            ${video.duration || '00:00'}
-          </div>
-          ${isScheduled ? `
-            <div class="absolute top-2 left-2 bg-purple-600 text-white text-[9px] font-black uppercase tracking-widest px-2 py-1 rounded-lg shadow-lg">
-              <i class="fa-solid fa-calendar-check mr-1"></i> Agendado
-            </div>
-          ` : ''}
-          <button data-action="preview-video" data-id="${video.id}" class="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-            <div class="w-12 h-12 bg-white/20 backdrop-blur-xl rounded-full flex items-center justify-center text-white text-xl border border-white/30 shadow-2xl scale-75 group-hover:scale-100 transition-transform">
-              <i class="fa-solid fa-play ml-1"></i>
+      <div class="vm-card" data-id="${video.id}" data-source="video">
+
+        <!-- Thumbnail -->
+        <div class="vm-thumb-wrap">
+          <img src="${thumbSrc}" class="vm-thumb" alt="${escapeHtml(video.title)}"
+               onerror="this.src='${thumbFallback}'" />
+
+          <div class="vm-thumb-overlay"></div>
+
+          <!-- Play on hover -->
+          <button data-action="preview-video" data-id="${video.id}" class="vm-play-btn">
+            <div class="vm-play-ring">
+              <i class="fa-solid fa-play"></i>
             </div>
           </button>
-        </div>
 
-        <div class="p-5 flex-1 flex flex-col">
-          <div class="flex justify-between items-start mb-2 gap-2">
-            <h4 class="font-bold text-slate-800 text-sm leading-tight line-clamp-2 flex-1">${escapeHtml(video.title)}</h4>
-            <div class="dropdown relative">
-              <button data-action="video-options" data-id="${video.id}" class="text-slate-300 hover:text-slate-600 w-8 h-8 rounded-full hover:bg-slate-50 flex items-center justify-center transition-colors">
-                <i class="fa-solid fa-ellipsis-vertical"></i>
-              </button>
+          <!-- Status dot badge -->
+          <div class="vm-status-badge">
+            <span class="vm-status-dot ${sc.dot}"></span>
+            <span class="vm-status-text">${sc.label}</span>
+          </div>
+
+          <!-- Duration -->
+          <div class="vm-duration">${video.duration || '—:——'}</div>
+
+          <!-- Scheduled badge (top-right, only if scheduled) -->
+          ${isScheduled ? `
+            <div class="vm-scheduled-badge">
+              <i class="fa-solid fa-calendar-check" style="font-size:8px"></i>
+              Agendado
             </div>
-          </div>
+          ` : ''}
+        </div>
 
-          <div class="flex flex-wrap gap-2 mb-4">
-             <span class="text-[9px] font-bold px-2 py-0.5 rounded-full uppercase border ${statusColors[video.status] || statusColors.novo}">
-               ${video.status}
-             </span>
-             <span class="text-[9px] font-bold px-2 py-0.5 rounded-full uppercase bg-slate-50 text-slate-500 border border-slate-100">
-               <i class="fa-solid ${this.getProviderIcon(video.sourceProvider)} mr-1"></i> ${video.sourceFolder || 'Upload'}
-             </span>
-          </div>
+        <!-- Metadata -->
+        <div class="vm-card-meta">
+          <h4 class="vm-card-title">${escapeHtml(video.title)}</h4>
 
-          <div class="mt-auto pt-4 border-t border-slate-50 flex gap-2">
-            <button data-action="attach-to-agenda" data-id="${video.id}" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white text-[11px] font-bold py-2.5 rounded-xl shadow-md active:scale-95 transition-all">
-              <i class="fa-solid fa-calendar-plus mr-1"></i> Agendar
+          <div class="vm-card-row">
+            <span class="vm-source-badge">
+              <i class="fa-solid ${this.getProviderIcon(video.sourceProvider)}" style="font-size:8px"></i>
+              ${video.sourceFolder || 'Local'}
+            </span>
+            <button data-action="video-options" data-id="${video.id}" class="vm-options-btn">
+              <i class="fa-solid fa-ellipsis-vertical" style="font-size:10px"></i>
             </button>
-            <button data-action="edit-video" data-id="${video.id}" class="w-10 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl flex items-center justify-center transition-colors">
-              <i class="fa-solid fa-pen-to-square text-xs"></i>
+          </div>
+
+          <div class="vm-card-actions">
+            <button data-action="attach-to-agenda" data-id="${video.id}" class="vm-action-primary">
+              <i class="fa-solid fa-calendar-plus" style="font-size:9px"></i>
+              Agendar
+            </button>
+            <button data-action="edit-video" data-id="${video.id}" class="vm-action-icon"
+              title="Editar vídeo">
+              <i class="fa-solid fa-pen-to-square" style="font-size:9px"></i>
             </button>
           </div>
         </div>
+
+      </div>
+    `;
+  },
+
+  renderEmptyState(activeFilter) {
+    const isTodos = activeFilter === 'todos';
+    return `
+      <div class="vm-empty">
+        <div class="vm-empty-icon">
+          <i class="fa-solid fa-clapperboard"></i>
+        </div>
+        <p class="vm-empty-title">${isTodos ? 'Vault vazio' : 'Nenhum resultado'}</p>
+        <p class="vm-empty-text">
+          ${isTodos
+            ? 'Conecte uma nuvem ou importe vídeos para começar a gerenciar seu conteúdo.'
+            : 'Nenhum vídeo encontrado com este filtro. Tente outro ou importe novos arquivos.'}
+        </p>
+        ${isTodos ? `
+          <button data-action="open-cloud-modal" class="vm-empty-cta">
+            <i class="fa-solid fa-cloud-arrow-up" style="font-size:11px"></i>
+            Conectar Nuvem
+          </button>
+        ` : ''}
       </div>
     `;
   },
@@ -153,7 +235,7 @@ export const VideoManagerUI = {
           ${isEnabled ? `
             <div class="grid grid-cols-2 gap-3 pt-3 border-t border-slate-100">
               <div>
-                <label class="block text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1 ml-1">Pasta de Entrada</label>
+                <label class="block text-[11px] font-bold text-slate-400 uppercase tracking-wide mb-1 ml-1">Pasta de Entrada</label>
                 <div class="relative">
                   <button data-action="select-folder" data-provider="${p}" data-type="input" class="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-[11px] text-left flex justify-between items-center overflow-hidden">
                     <span class="truncate">${conn.inputFolderName || 'Selecionar...'}</span>
@@ -162,7 +244,7 @@ export const VideoManagerUI = {
                 </div>
               </div>
               <div>
-                <label class="block text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1 ml-1">Pasta de Postados</label>
+                <label class="block text-[11px] font-bold text-slate-400 uppercase tracking-wide mb-1 ml-1">Pasta de Postados</label>
                 <div class="relative">
                   <button data-action="select-folder" data-provider="${p}" data-type="posted" class="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-[11px] text-left flex justify-between items-center overflow-hidden">
                     <span class="truncate">${conn.postedFolderName || 'Selecionar...'}</span>
@@ -182,7 +264,7 @@ export const VideoManagerUI = {
           <h4 class="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4">Escolha um Provedor</h4>
           ${providersHTML}
         </div>
-        <p class="text-[9px] text-slate-400 mt-2 text-center uppercase tracking-widest font-bold">O Clipper OS sincronizará novos vídeos e os moverá após a postagem.</p>
+        <p class="text-xs text-slate-400 mt-2 text-center">O Clipper OS sincronizará novos vídeos e os moverá após a postagem.</p>
       </div>
     `;
   },

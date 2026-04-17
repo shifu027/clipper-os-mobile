@@ -404,16 +404,16 @@ const App = {
         const zone = e.target.closest('[data-action="attach-content"]');
         if (zone) {
           e.preventDefault();
-          const container = zone.closest('.bg-white') || zone;
-          container.classList.add('ring-2', 'ring-blue-500', 'bg-blue-50/50');
+          const container = zone.closest('.pl-slot') || zone.closest('.bg-white') || zone;
+          container.classList.add('pl-drag-over');
         }
       });
 
       content.addEventListener('dragleave', (e) => {
         const zone = e.target.closest('[data-action="attach-content"]');
         if (zone) {
-          const container = zone.closest('.bg-white') || zone;
-          container.classList.remove('ring-2', 'ring-blue-500', 'bg-blue-50/50');
+          const container = zone.closest('.pl-slot') || zone.closest('.bg-white') || zone;
+          container.classList.remove('pl-drag-over');
         }
       });
 
@@ -421,8 +421,8 @@ const App = {
         const zone = e.target.closest('[data-action="attach-content"]');
         if (zone) {
           e.preventDefault();
-          const container = zone.closest('.bg-white') || zone;
-          container.classList.remove('ring-2', 'ring-blue-500', 'bg-blue-50/50');
+          const container = zone.closest('.pl-slot') || zone.closest('.bg-white') || zone;
+          container.classList.remove('pl-drag-over');
           try {
             const data = JSON.parse(e.dataTransfer.getData('application/json'));
             const slotId = zone.dataset.id;
@@ -492,9 +492,9 @@ const App = {
     const createBtn = (v, mobile) => {
       const active = this.state.currentView === v.id;
       if (mobile) {
-        return `<button data-nav="${v.id}" class="flex flex-col justify-center items-center py-2 transition-all nav-item ${active ? 'text-blue-600 font-semibold' : 'text-slate-400'}">
+        return `<button data-nav="${v.id}" class="flex flex-col justify-center items-center py-2 px-3 rounded-2xl transition-all nav-item min-w-[52px] min-h-[52px] ${active ? 'text-blue-600 bg-blue-50' : 'text-slate-400'}">
           <i class="fa-solid ${v.icon} text-xl mb-1"></i>
-          <span class="text-[10px]">${v.name}</span>
+          <span class="text-[11px] font-medium">${v.name}</span>
         </button>`;
       }
       return `<button data-nav="${v.id}" class="w-full flex items-center gap-3 px-6 py-3.5 mb-1 transition-all nav-item ${active ? 'bg-blue-50 text-blue-600 font-semibold border-r-4 border-blue-600' : 'text-slate-500 hover:bg-slate-50'}">
@@ -582,7 +582,7 @@ const App = {
           <div class="flex items-center gap-4 p-4 bg-white rounded-2xl border ${slot.isPosted ? 'border-green-200 bg-green-50/30' : 'border-slate-200'} mb-3 shadow-sm transition-all group">
             <div class="font-bold ${slot.isPosted ? 'text-green-600' : 'text-slate-800'} w-14 text-center">
               <div class="text-lg">${escapeHtml(slot.time)}</div>
-              <div class="text-[9px] uppercase tracking-wide text-slate-400">${escapeHtml(slot.platform.split(' ')[0])}</div>
+              <div class="text-[11px] uppercase tracking-wide text-slate-400">${escapeHtml(slot.platform.split(' ')[0])}</div>
             </div>
             <div class="flex-1 border-l border-slate-100 pl-4">
               ${asset
@@ -606,22 +606,22 @@ const App = {
         </div>
       </div>
 
-      <div class="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 mb-8">
-        <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
-          <p class="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1"><i class="fa-solid fa-bullseye text-blue-500 mr-1"></i> Progresso Hoje</p>
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+        <div class="${progress >= 70 ? 'bg-green-50 border-green-200' : progress < 30 && totalGoal > 0 ? 'bg-amber-50 border-amber-200' : 'bg-white border-slate-200'} p-4 rounded-2xl border shadow-sm">
+          <p class="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1"><i class="fa-solid fa-bullseye ${progress >= 70 ? 'text-green-500' : 'text-blue-500'} mr-1"></i> Progresso Hoje</p>
           <div class="flex items-end gap-2"><h3 class="text-2xl font-bold text-slate-800">${progress}%</h3></div>
-          <div class="w-full bg-slate-100 h-1.5 rounded-full mt-2 overflow-hidden"><div class="bg-blue-500 h-full rounded-full transition-all" style="width:${progress}%"></div></div>
+          <div class="w-full bg-slate-100 h-2.5 rounded-full mt-2 overflow-hidden"><div class="${progress >= 70 ? 'bg-gradient-to-r from-green-500 to-green-400' : 'bg-gradient-to-r from-blue-600 to-blue-400'} h-full rounded-full transition-all" style="width:${progress}%"></div></div>
         </div>
-        <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
-          <p class="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1"><i class="fa-solid fa-check-double text-green-500 mr-1"></i> Publicado</p>
+        <div class="${postsDone >= totalGoal && totalGoal > 0 ? 'bg-green-50 border-green-200' : 'bg-white border-slate-200'} p-4 rounded-2xl border shadow-sm">
+          <p class="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1"><i class="fa-solid fa-check-double text-green-500 mr-1"></i> Publicado</p>
           <h3 class="text-2xl font-bold text-slate-800">${postsDone} <span class="text-xs font-normal text-slate-400">/ ${totalGoal}</span></h3>
         </div>
-        <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm cursor-pointer hover:border-amber-300" data-action="goto-clipper">
-          <p class="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1"><i class="fa-solid fa-scissors text-amber-500 mr-1"></i> Clipes Pendentes</p>
+        <div class="${pendingClips > 0 ? 'bg-amber-50 border-amber-200 hover:border-amber-400' : 'bg-white border-slate-200 hover:border-amber-300'} p-4 rounded-2xl border shadow-sm cursor-pointer" data-action="goto-clipper">
+          <p class="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1"><i class="fa-solid fa-scissors text-amber-500 mr-1"></i> Clipes Pendentes</p>
           <h3 class="text-2xl font-bold text-slate-800">${pendingClips}</h3>
         </div>
         <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm cursor-pointer hover:border-purple-300" data-action="goto-library">
-          <p class="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1"><i class="fa-solid fa-photo-film text-purple-500 mr-1"></i> Itens na Biblioteca</p>
+          <p class="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1"><i class="fa-solid fa-photo-film text-purple-500 mr-1"></i> Biblioteca</p>
           <h3 class="text-2xl font-bold text-slate-800">${libraryCount}</h3>
         </div>
       </div>
@@ -632,7 +632,7 @@ const App = {
             <h3 class="font-bold text-lg text-slate-800">Agenda de Hoje</h3>
             <button data-action="goto-pipeline" class="text-sm text-blue-600 font-bold hover:underline">Ver Pipeline →</button>
           </div>
-          <div class="bg-slate-50 p-2 md:p-4 rounded-3xl border border-slate-200">
+          <div class="bg-slate-50 p-3 md:p-5 rounded-3xl border border-slate-200">
             ${routineHTML}
           </div>
         </div>
@@ -644,15 +644,15 @@ const App = {
             <div class="space-y-3">
               <div class="bg-white/10 border border-white/10 p-3 rounded-xl flex items-center gap-3">
                 <i class="fa-solid fa-check-circle text-green-400"></i>
-                <div><div class="text-sm font-bold">${this.state.history.length}</div><div class="text-[10px] text-slate-400">Total Publicado</div></div>
+                <div><div class="text-sm font-bold">${this.state.history.length}</div><div class="text-[11px] text-slate-300">Total Publicado</div></div>
               </div>
               <div class="bg-white/10 border border-white/10 p-3 rounded-xl flex items-center gap-3">
                 <i class="fa-solid fa-fire text-orange-400"></i>
-                <div><div class="text-sm font-bold">${this.state.history.filter(h => h.performance === 'Viral').length}</div><div class="text-[10px] text-slate-400">Posts Virais</div></div>
+                <div><div class="text-sm font-bold">${this.state.history.filter(h => h.performance === 'Viral').length}</div><div class="text-[11px] text-slate-300">Posts Virais</div></div>
               </div>
               <div class="bg-white/10 border border-white/10 p-3 rounded-xl flex items-center gap-3">
                 <i class="fa-solid fa-box-open text-blue-400"></i>
-                <div><div class="text-sm font-bold">${this.state.library.length + this.state.clips.filter(c => c.status === 'approved').length}</div><div class="text-[10px] text-slate-400">Pronto para Publicar</div></div>
+                <div><div class="text-sm font-bold">${this.state.library.length + this.state.clips.filter(c => c.status === 'approved').length}</div><div class="text-[11px] text-slate-300">Pronto para Publicar</div></div>
               </div>
             </div>
           </div>
@@ -684,7 +684,7 @@ const App = {
               </p>
             </div>
             <div class="flex gap-2 border-t border-slate-100 pt-4">
-              <button data-action="schedule-asset" data-id="${item.id}" data-source="library" class="flex-1 bg-slate-900 text-white text-xs py-2.5 rounded-xl font-bold hover:bg-slate-800 shadow-md active:scale-95 transition-transform"><i class="fa-solid fa-calendar-plus mr-1"></i> Agendar</button>
+              <button data-action="schedule-asset" data-id="${item.id}" data-source="library" class="flex-1 bg-blue-600 text-white text-xs py-2.5 rounded-xl font-bold hover:bg-blue-700 shadow-md active:scale-95 transition-transform"><i class="fa-solid fa-calendar-plus mr-1"></i> Agendar</button>
               ${item.link ? `<a href="${escapeHtml(item.link)}" target="_blank" rel="noopener noreferrer" class="bg-slate-100 text-slate-600 text-xs px-4 py-2.5 rounded-xl hover:bg-slate-200 font-medium transition-colors inline-flex items-center"><i class="fa-solid fa-cloud-arrow-down"></i></a>` : ''}
             </div>
           </div>
@@ -753,7 +753,7 @@ const App = {
               <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider"><i class="fa-solid fa-bullhorn mr-1"></i> ${escapeHtml(c.platform || 'Multi-plataforma')}</span>
               ${c.status === 'approved' || c.status === 'aprovado'
                 ? `<button data-action="schedule-asset" data-id="${c.id}" data-source="clip" class="bg-blue-600 text-white text-xs px-4 py-2 rounded-xl font-bold hover:bg-blue-700 shadow-md active:scale-95 transition-transform"><i class="fa-solid fa-calendar-plus mr-1"></i> Agendar</button>`
-                : `<button data-action="cycle-clip" data-id="${c.id}" class="text-xs font-semibold text-${st.color}-600 underline">Avançar Estágio →</button>`}
+                : `<button data-action="cycle-clip" data-id="${c.id}" class="bg-${st.color}-50 border border-${st.color}-200 text-${st.color}-700 text-xs font-bold px-3 py-2 rounded-xl hover:bg-${st.color}-100 transition-colors active:scale-95"><i class="fa-solid fa-arrow-right mr-1"></i> Avançar Estágio</button>`}
             </div>
           </div>`;
         }).join('');
@@ -786,94 +786,157 @@ const App = {
   // ─── Pipeline / Calendar ────────────────────────────
   getPipelineHTML() {
     const today = new Date();
+    const todayDateStr = today.toISOString().split('T')[0];
     const days = [];
     const weekdays = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
     for (let i = 0; i < 7; i++) {
       const d = new Date(today);
       d.setDate(today.getDate() + i);
+      const dateStr = d.toISOString().split('T')[0];
       days.push({
-        dateStr: d.toISOString().split('T')[0],
+        dateStr,
         dayName: weekdays[d.getDay()],
         dayNum: d.getDate(),
+        isToday: dateStr === todayDateStr,
       });
     }
 
     const selectedDate = this.state.filterDate;
     const activeFilter = this.state.activeNetworkFilter || 'Todas';
 
+    // Platform color/label config
+    const PLT = {
+      'TikTok':           { color: '#fe2c55', bg: 'rgba(254,44,85,0.1)',    label: 'TikTok' },
+      'Instagram Reels':  { color: '#e1306c', bg: 'rgba(225,48,108,0.1)',   label: 'Instagram' },
+      'YouTube Shorts':   { color: '#ff0000', bg: 'rgba(255,0,0,0.08)',     label: 'YouTube' },
+      'LinkedIn':         { color: '#0077b5', bg: 'rgba(0,119,181,0.1)',    label: 'LinkedIn' },
+      'Facebook':         { color: '#1877f2', bg: 'rgba(24,119,242,0.1)',   label: 'Facebook' },
+      'X / Twitter':      { color: '#111827', bg: 'rgba(17,24,39,0.08)',    label: 'X / Twitter' },
+      'Auto':             { color: '#7c3aed', bg: 'rgba(124,58,237,0.1)',   label: 'Smart Slot' },
+      'Pendente':         { color: '#6b7280', bg: 'rgba(107,114,128,0.08)', label: 'Pendente' },
+    };
+
+    const getPlt = (p) => {
+      if (!p) return { color: '#6b7280', bg: 'rgba(107,114,128,0.08)', label: '—' };
+      for (const [key, val] of Object.entries(PLT)) {
+        if (p === key || p.startsWith(key.split(' ')[0])) return val;
+      }
+      return { color: '#6b7280', bg: 'rgba(107,114,128,0.08)', label: p };
+    };
+
+    // ── Date strip ─────────────────────────────────────
     const calendarHTML = days.map(d => `
-      <button data-action="set-date" data-date="${d.dateStr}" class="flex-1 flex flex-col items-center p-3 rounded-2xl transition-all border ${selectedDate === d.dateStr ? 'bg-blue-600 text-white border-blue-600 shadow-md' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'}">
-        <span class="text-[10px] uppercase font-bold opacity-80 mb-1">${d.dayName}</span>
-        <span class="text-xl font-bold leading-none">${d.dayNum}</span>
+      <button data-action="set-date" data-date="${d.dateStr}"
+        class="pl-date-btn${selectedDate === d.dateStr ? ' pl-active' : ''}${d.isToday ? ' pl-today' : ''}">
+        <span class="pl-date-day">${d.dayName}</span>
+        <span class="pl-date-num">${d.dayNum}</span>
       </button>
     `).join('');
 
+    // ── Platform filters ────────────────────────────────
     const filterPlatforms = ['Todas', ...PLATFORMS];
-    const filtersHTML = filterPlatforms.map(p => `
-      <button data-action="filter-network" data-network="${p}" class="px-4 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap border ${activeFilter === p ? 'bg-slate-900 text-white border-slate-900' : 'bg-white text-slate-500 border-slate-200 hover:bg-slate-50'}">
-        ${p}
-      </button>
-    `).join('');
+    const filtersHTML = filterPlatforms.map(p => {
+      const plt = getPlt(p);
+      return `
+        <button data-action="filter-network" data-network="${p}"
+          class="pl-filter-btn${activeFilter === p ? ' pl-active' : ''}">
+          ${p === 'Todas'
+            ? `<i class="fa-solid fa-layer-group" style="font-size:9px"></i>`
+            : `<span class="pl-platform-dot" style="background:${plt.color}"></span>`}
+          ${p === 'Todas' ? 'Todas' : plt.label}
+        </button>`;
+    }).join('');
 
+    // ── Slots ──────────────────────────────────────────
     let slots = this.state.routine.filter(r => r.date === selectedDate);
     if (activeFilter !== 'Todas') {
       slots = slots.filter(r => r.platform.includes(activeFilter) || r.platform === 'Auto' || r.platform === 'Pendente');
     }
     slots.sort((a, b) => a.time.localeCompare(b.time));
 
+    const renderSlot = (slot) => {
+      const asset = this.findAsset(slot.assetId, slot.source);
+      const plt = getPlt(slot.platform);
+      const isPosted = !!slot.isPosted;
+      const isEmpty = !asset;
+      let stateClass = isEmpty ? ' pl-empty' : '';
+      if (isPosted) stateClass = ' pl-posted';
+
+      return `
+        <div class="pl-slot bg-white${stateClass}">
+          <!-- Time -->
+          <div class="pl-time-col">
+            <span class="pl-time-val">${escapeHtml(slot.time)}</span>
+            <span class="pl-time-lbl">${isPosted ? 'Postado' : 'Slot'}</span>
+          </div>
+
+          <!-- Platform colour stripe -->
+          <div class="pl-stripe" style="background:${plt.color}"></div>
+
+          <!-- Body -->
+          <div class="pl-slot-body">
+            <span class="pl-platform-tag" style="color:${plt.color};background:${plt.bg}">
+              <span class="pl-platform-dot" style="background:${plt.color}"></span>
+              ${plt.label}
+            </span>
+
+            ${isPosted ? `<span class="pl-posted-badge"><i class="fa-solid fa-check"></i> Publicado</span>` : ''}
+
+            ${asset
+              ? `<div class="pl-content-info">
+                   <div class="pl-content-title" title="${escapeHtml(asset.title)}">${escapeHtml(asset.title)}</div>
+                   <div class="pl-content-meta">
+                     <i class="fa-solid ${slot.source === 'videoAsset' ? 'fa-clapperboard' : 'fa-folder'}"></i>
+                     ${slot.source === 'videoAsset' ? 'Central de Vídeos' : 'Biblioteca'}
+                   </div>
+                 </div>`
+              : `<div class="pl-empty-hint" data-action="attach-content" data-id="${slot.id}">
+                   <i class="fa-solid fa-arrow-left" style="font-size:9px;opacity:0.35"></i>
+                   Arraste ou selecione conteúdo
+                 </div>`}
+          </div>
+
+          <!-- Actions -->
+          <div class="pl-slot-actions">
+            ${!isPosted && asset
+              ? `<button data-action="post-slot" data-id="${slot.id}" class="pl-btn-post">
+                   <i class="fa-solid fa-paper-plane" style="font-size:10px"></i> Postar
+                 </button>
+                 <button data-action="unschedule" data-id="${slot.id}" class="pl-btn-icon" title="Desvincular">
+                   <i class="fa-solid fa-link-slash"></i>
+                 </button>`
+              : ''}
+            ${!isPosted && isEmpty
+              ? `<button data-action="attach-content" data-id="${slot.id}" class="pl-btn-attach">
+                   <i class="fa-solid fa-paperclip" style="font-size:10px"></i> Selecionar
+                 </button>`
+              : ''}
+            ${isPosted
+              ? `<button data-action="reuse-content" data-id="${slot.id}" class="pl-btn-icon pl-recycle" title="Reutilizar">
+                   <i class="fa-solid fa-recycle"></i>
+                 </button>`
+              : `<button data-action="delete-slot" data-id="${slot.id}" class="pl-btn-icon" title="Remover slot">
+                   <i class="fa-solid fa-trash-can"></i>
+                 </button>`}
+          </div>
+        </div>`;
+    };
+
     const slotsHTML = slots.length === 0
-      ? `<div class="text-center py-12 text-slate-400 border-2 border-dashed border-slate-200 rounded-3xl bg-white">
-           <i class="fa-solid fa-calendar-xmark text-4xl mb-4 text-slate-200"></i>
-           <p class="text-sm font-medium">Nenhum slot para esta combinação.</p>
-           <button data-action="add-slot" data-date="${selectedDate}" class="mt-4 text-sm font-bold text-blue-600 hover:underline">+ Adicionar Horário Operacional</button>
+      ? `<div class="pl-empty-state">
+           <div class="pl-empty-icon"><i class="fa-solid fa-calendar-xmark"></i></div>
+           <p class="pl-empty-title">Nenhum slot para este dia</p>
+           <p class="pl-empty-text">Crie horários operacionais e arraste conteúdo para distribuir.</p>
+           <button data-action="add-slot" data-date="${selectedDate}" class="pl-empty-cta">
+             <i class="fa-solid fa-plus" style="font-size:10px"></i> Criar Primeiro Slot
+           </button>
          </div>`
-      : slots.map(slot => {
-          const asset = this.findAsset(slot.assetId, slot.source);
-          const isAuto = slot.platform === 'Auto' || slot.platform === 'Pendente';
+      : slots.map(slot => renderSlot(slot)).join('')
+        + `<button data-action="add-slot" data-date="${selectedDate}" class="pl-add-slot">
+             <i class="fa-solid fa-plus" style="font-size:11px"></i> Novo Horário Operacional
+           </button>`;
 
-          return `
-          <div class="bg-white p-5 rounded-3xl shadow-sm border ${asset ? 'border-blue-100 bg-blue-50/10' : 'border-slate-200'} mb-4 flex gap-5 items-center group transition-all hover:shadow-md">
-            <div class="flex flex-col items-center justify-center w-16 h-16 rounded-2xl bg-slate-50 border border-slate-100 group-hover:bg-white transition-colors">
-              <span class="text-lg font-black text-slate-800">${escapeHtml(slot.time)}</span>
-              <span class="text-[8px] font-black uppercase tracking-tighter text-slate-400">OPERACIONAL</span>
-            </div>
-
-            <div class="flex-1 min-w-0">
-              <div class="flex items-center gap-2 mb-1.5">
-                <span class="text-[10px] font-black text-blue-600 uppercase tracking-widest bg-blue-50 px-2 py-0.5 rounded-lg border border-blue-100">
-                  ${escapeHtml(slot.platform === 'Auto' ? 'Smart Slot' : slot.platform)}
-                </span>
-                ${slot.isPosted ? '<span class="text-[9px] font-bold text-green-600 bg-green-50 px-2 py-0.5 rounded-lg"><i class="fa-solid fa-check mr-1"></i> PUBLICADO</span>' : ''}
-              </div>
-
-              ${asset
-                ? `<div class="flex justify-between items-center gap-3">
-                     <div class="flex-1 min-w-0">
-                       <h4 class="text-sm font-bold text-slate-800 truncate" title="${escapeHtml(asset.title)}">${escapeHtml(asset.title)}</h4>
-                       <div class="flex items-center gap-2 mt-1">
-                          <span class="text-[10px] text-slate-400"><i class="fa-solid ${slot.source === 'videoAsset' ? 'fa-clapperboard' : 'fa-folder'} mr-1"></i> ${slot.source === 'videoAsset' ? 'Central de Vídeos' : 'Biblioteca'}</span>
-                       </div>
-                     </div>
-                     <div class="flex items-center gap-1 shrink-0">
-                       <button data-action="unschedule" data-id="${slot.id}" class="w-9 h-9 flex items-center justify-center rounded-xl bg-slate-100 text-slate-400 hover:bg-red-50 hover:text-red-500 transition-all" title="Desvincular">
-                         <i class="fa-solid fa-link-slash text-xs"></i>
-                       </button>
-                     </div>
-                   </div>`
-                : `<div class="flex justify-between items-center">
-                     <div class="text-xs text-slate-400 font-medium">Livre para conteúdo</div>
-                     <div class="flex gap-2">
-                       <button data-action="attach-content" data-id="${slot.id}" class="bg-blue-600 text-white text-[10px] font-black px-3 py-1.5 rounded-lg hover:bg-blue-700 shadow-sm transition-all active:scale-95">
-                         <i class="fa-solid fa-paperclip mr-1"></i> ANEXAR
-                       </button>
-                       <button data-action="delete-slot" data-id="${slot.id}" class="text-slate-300 hover:text-red-500 p-1 transition-colors"><i class="fa-solid fa-trash-can text-xs"></i></button>
-                     </div>
-                   </div>`}
-            </div>
-          </div>`;
-        }).join('') + `<button data-action="add-slot" data-date="${selectedDate}" class="w-full border-2 border-dashed border-slate-200 text-slate-400 hover:border-blue-400 hover:text-blue-500 hover:bg-blue-50/50 rounded-3xl p-4 text-center text-sm font-bold transition-all">+ Novo Horário Operacional</button>`;
-
-    // Available content for the side panel
+    // ── Content Vault (right panel) ─────────────────────
     const scheduledAssetIds = new Set(this.state.routine.map(r => r.assetId).filter(Boolean));
     const readyContent = [
       ...this.state.videoAssets.filter(v => v.status === 'pronto' || v.status === 'reutilizar'),
@@ -882,74 +945,86 @@ const App = {
     ];
 
     const readyHTML = readyContent.length === 0
-      ? `<div class="text-xs text-slate-400 text-center py-10 px-4 bg-white/50 rounded-2xl border border-dashed border-slate-200">
-          <i class="fa-solid fa-inbox text-2xl mb-2 opacity-20"></i>
-          <p>Nenhum conteúdo pronto disponível para agendamento.</p>
-        </div>`
+      ? `<div style="text-align:center;padding:28px 12px;color:#374151;font-size:11px;font-family:'Outfit',sans-serif">
+           <i class="fa-solid fa-inbox" style="font-size:20px;opacity:0.15;display:block;margin-bottom:8px"></i>
+           Nenhum conteúdo pronto disponível.
+         </div>`
       : readyContent.map(item => {
           const isVideo = !!item.thumbnailUrl;
           const source = item.type ? 'library' : (isVideo ? 'videoAsset' : 'clip');
           const isScheduled = scheduledAssetIds.has(item.id);
+          const typeLabel = item.type || (isVideo ? 'Vídeo' : 'Clipe');
 
           return `
-          <div class="bg-white p-3 rounded-2xl shadow-sm border ${isScheduled ? 'border-amber-200 bg-amber-50/20' : 'border-slate-200'} mb-3 hover:border-blue-400 transition-all group cursor-move draggable-item" draggable="true" data-id="${item.id}" data-source="${source}">
-            <div class="flex gap-3 pointer-events-none">
-              ${isVideo ? `<img src="${item.thumbnailUrl}" class="w-12 h-12 rounded-lg object-cover bg-slate-100" />` : `<div class="w-12 h-12 rounded-lg bg-slate-100 flex items-center justify-center text-slate-400"><i class="fa-solid fa-file-lines"></i></div>`}
-              <div class="flex-1 min-w-0">
-                <div class="flex items-center justify-between mb-0.5">
-                  <div class="text-[9px] font-black text-slate-400 uppercase tracking-tighter">${escapeHtml(item.type || (isVideo ? 'Vídeo' : 'Clipe'))}</div>
-                  ${isScheduled ? `<span class="text-[8px] font-black text-amber-600 bg-amber-100 px-1.5 py-0.5 rounded uppercase tracking-tighter"><i class="fa-solid fa-calendar-check mr-1"></i> Agendado</span>` : ''}
+            <div class="pl-vault-item${isScheduled ? ' pl-scheduled' : ''} draggable-item"
+                 draggable="true" data-id="${item.id}" data-source="${source}">
+              <div class="pointer-events-none" style="display:flex;gap:8px;align-items:flex-start">
+                ${isVideo
+                  ? `<img src="${item.thumbnailUrl}" class="pl-vault-thumb" alt="" />`
+                  : `<div class="pl-vault-thumb-placeholder"><i class="fa-solid fa-file-lines"></i></div>`}
+                <div style="flex:1;min-width:0">
+                  <div class="pl-vault-item-type">
+                    ${escapeHtml(typeLabel)}
+                    ${isScheduled ? `<span class="pl-vault-item-scheduled">· Agendado</span>` : ''}
+                  </div>
+                  <div class="pl-vault-item-title">${escapeHtml(item.title)}</div>
                 </div>
-                <h4 class="text-xs font-bold text-slate-800 leading-tight line-clamp-2">${escapeHtml(item.title)}</h4>
               </div>
-            </div>
-            <button data-action="schedule-asset" data-id="${item.id}" data-source="${source}" class="w-full mt-3 bg-slate-50 group-hover:bg-blue-600 group-hover:text-white text-slate-500 border border-slate-100 group-hover:border-blue-600 text-[10px] font-black py-2 rounded-xl transition-all uppercase tracking-widest">
-              Agendar ${isScheduled ? 'Novamente' : ''}
-            </button>
-          </div>
-        `;}).join('');
+              <button data-action="schedule-asset" data-id="${item.id}" data-source="${source}"
+                class="pl-vault-btn">
+                ${isScheduled ? 'Agendar Novamente' : 'Agendar'}
+              </button>
+            </div>`;
+        }).join('');
+
+    // Date label for section header
+    const selDay = days.find(d => d.dateStr === selectedDate);
+    const dateLabel = selDay
+      ? `${selDay.dayName} ${selDay.dayNum}${selDay.isToday ? ' — Hoje' : ''}`
+      : formatDate(selectedDate);
 
     return `
-      <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
-        <div>
-          <h2 class="text-3xl font-bold text-slate-900 tracking-tight">Agenda Operacional</h2>
-          <p class="text-sm text-slate-500 mt-1">Gerencie os slots de publicação e o fluxo de distribuição.</p>
-        </div>
-        <div class="flex gap-2">
-          <button data-action="export-calendar" class="bg-white text-slate-700 border border-slate-200 text-xs font-bold px-4 py-2.5 rounded-2xl shadow-sm hover:bg-slate-50 transition-all flex items-center gap-2">
-            <i class="fa-solid fa-file-export text-blue-500"></i> Exportar
+      <div class="pl-container">
+
+        <!-- Header -->
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:1.5rem">
+          <div>
+            <h2 class="pl-main-title">Agenda Operacional</h2>
+            <p class="pl-main-subtitle">Pipeline de distribuição · ${slots.length} slot${slots.length !== 1 ? 's' : ''} em ${dateLabel}</p>
+          </div>
+          <button data-action="export-calendar" class="pl-export-btn">
+            <i class="fa-solid fa-file-export" style="color:#3b82f6;font-size:10px"></i>
+            Exportar .ics
           </button>
         </div>
-      </div>
 
-      <div class="flex gap-2 overflow-x-auto hide-scrollbar pb-4 mb-4 snap-x">
-        ${calendarHTML}
-      </div>
+        <!-- Date strip -->
+        <div class="pl-date-strip">${calendarHTML}</div>
 
-      <div class="flex gap-2 overflow-x-auto hide-scrollbar pb-6 mb-2">
-        ${filtersHTML}
-      </div>
+        <!-- Platform filters -->
+        <div class="pl-filters">${filtersHTML}</div>
 
-      <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        <div class="lg:col-span-2">
-          <div class="flex items-center justify-between mb-4">
-             <h3 class="font-bold text-slate-800 flex items-center gap-2"><i class="fa-solid fa-clock-rotate-left text-blue-500"></i> Slots para ${formatDate(selectedDate)}</h3>
-             <span class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">${slots.length} HORÁRIOS</span>
+        <!-- Main grid -->
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+          <!-- Timeline -->
+          <div class="lg:col-span-2">
+            <div class="pl-section-header">
+              <span class="pl-section-title">${dateLabel}</span>
+              <span class="pl-section-count">${slots.length} slot${slots.length !== 1 ? 's' : ''}</span>
+            </div>
+            <div class="pl-slots-area">${slotsHTML}</div>
           </div>
-          <div class="bg-slate-50/50 p-2 md:p-6 rounded-[2rem] border border-slate-200/60">
-            ${slotsHTML}
-          </div>
-        </div>
 
-        <div class="space-y-6">
-          <div class="bg-slate-900 rounded-[2rem] p-6 text-white shadow-xl relative overflow-hidden">
-            <i class="fa-solid fa-rocket absolute -right-4 -bottom-4 text-7xl opacity-10 -rotate-12"></i>
-            <h3 class="font-bold text-lg mb-1 flex items-center gap-2">Ready to Post</h3>
-            <p class="text-[10px] text-slate-400 uppercase tracking-widest mb-6">Conteúdo finalizado</p>
-            <div class="overflow-y-auto max-h-[500px] pr-1 hide-scrollbar">
-              ${readyHTML}
+          <!-- Content Vault -->
+          <div>
+            <div class="pl-vault">
+              <div class="pl-vault-label">Vault de Conteúdo</div>
+              <div class="pl-vault-sub">${readyContent.length} item${readyContent.length !== 1 ? 's' : ''} prontos · arraste para um slot</div>
+              <div class="pl-vault-scroll">${readyHTML}</div>
             </div>
           </div>
+
         </div>
       </div>`;
   },
@@ -989,7 +1064,7 @@ const App = {
             </div>
             <div class="flex items-center gap-3 w-full md:w-auto mt-2 md:mt-0 border-t md:border-0 border-slate-100 pt-3 md:pt-0">
               <div class="flex flex-col flex-1 md:flex-none">
-                <label class="text-[9px] font-bold text-slate-400 uppercase mb-1 ml-1">Performance</label>
+                <label class="text-[11px] font-bold text-slate-400 uppercase mb-1 ml-1">Performance</label>
                 <select data-action="set-perf" data-id="${h.id}" class="bg-slate-50 border border-slate-200 text-xs font-bold rounded-xl px-3 py-2.5 focus:ring-2 focus:ring-blue-500 outline-none w-full md:w-32 ${h.performance === 'Viral' ? 'text-orange-600 bg-orange-50 border-orange-200' : 'text-slate-600'}">
                   <option value="Pending" ${h.performance === 'Pending' || h.performance === 'Pendente' ? 'selected' : ''}>⏳ Avaliar</option>
                   <option value="Low" ${h.performance === 'Low' || h.performance === 'Baixo' ? 'selected' : ''}>Baixo</option>
@@ -1088,7 +1163,7 @@ const App = {
                 </div>
                 <div class="text-right">
                   <div class="text-[10px] font-bold text-slate-500 mb-1">${user.date}</div>
-                  <span class="text-[8px] font-bold uppercase px-1.5 py-0.5 rounded ${user.status === 'Ativo' ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'}">${user.status}</span>
+                  <span class="text-[11px] font-bold uppercase px-1.5 py-0.5 rounded ${user.status === 'Ativo' ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'}">${user.status}</span>
                 </div>
               </div>
             `).join('')}
@@ -1145,10 +1220,10 @@ const App = {
   getGeminiHTML() {
     // Enabled state (using the Supabase Edge Function Proxy)
     const tools = [
-      { id: 'hooks', label: '🎣 Hooks' },
-      { id: 'titles', label: '📝 Títulos' },
-      { id: 'captions', label: '🏷️ Legendas' },
-      { id: 'scripts', label: '🎬 Roteiros' },
+      { id: 'hooks', label: '<i class="fa-solid fa-bolt mr-1.5"></i> Hooks' },
+      { id: 'titles', label: '<i class="fa-solid fa-heading mr-1.5"></i> Títulos' },
+      { id: 'captions', label: '<i class="fa-solid fa-tag mr-1.5"></i> Legendas' },
+      { id: 'scripts', label: '<i class="fa-solid fa-film mr-1.5"></i> Roteiros' },
     ];
 
     return `
@@ -1344,7 +1419,7 @@ const App = {
                 class="w-full text-left p-3 rounded-xl border border-slate-200 hover:border-blue-500 hover:bg-blue-50 transition-all flex items-center gap-3 group">
                 ${item.thumbnailUrl ? `<img src="${item.thumbnailUrl}" class="w-10 h-10 rounded-lg object-cover" />` : `<div class="w-10 h-10 rounded-lg bg-slate-100 flex items-center justify-center text-slate-400"><i class="fa-solid fa-file-lines"></i></div>`}
                 <div class="flex-1 min-w-0">
-                  <div class="text-[8px] font-black text-slate-400 uppercase">${escapeHtml(item.type || (item.thumbnailUrl ? 'Vídeo' : 'Clipe'))}</div>
+                  <div class="text-[11px] font-bold text-slate-400 uppercase">${escapeHtml(item.type || (item.thumbnailUrl ? 'Vídeo' : 'Clipe'))}</div>
                   <div class="text-xs font-bold text-slate-800 truncate">${escapeHtml(item.title)}</div>
                 </div>
                 <i class="fa-solid fa-chevron-right text-slate-300 group-hover:text-blue-500 text-[10px]"></i>
@@ -1477,11 +1552,11 @@ const App = {
       </div>
       <div class="mt-4 grid grid-cols-2 gap-3">
         <div class="bg-slate-50 p-3 rounded-xl border border-slate-100">
-           <div class="text-[9px] font-black text-slate-400 uppercase">Duração</div>
+           <div class="text-[11px] font-bold text-slate-400 uppercase">Duração</div>
            <div class="font-bold text-slate-800">${video.duration}</div>
         </div>
         <div class="bg-slate-50 p-3 rounded-xl border border-slate-100">
-           <div class="text-[9px] font-black text-slate-400 uppercase">Origem</div>
+           <div class="text-[11px] font-bold text-slate-400 uppercase">Origem</div>
            <div class="font-bold text-slate-800">${video.sourceProvider}</div>
         </div>
       </div>
@@ -1644,11 +1719,12 @@ const App = {
         this.showToast('Vídeo marcado como pronto!', 'success');
       }
       if (action === 'delete-video') {
-        if (confirm('Remover vídeo da lista? (Não apagará na nuvem)')) {
+        this.showConfirm('O vídeo será removido da lista. Ele não será apagado da nuvem.', () => {
           this.state.videoAssets = this.state.videoAssets.filter(v => v.id !== id);
           saveState(this.state);
           this.render();
-        }
+          this.showToast('Vídeo removido da lista.', 'info');
+        }, { title: 'Remover vídeo', confirmLabel: 'Remover', danger: false });
       }
     }, { once: true });
   },
@@ -1691,7 +1767,7 @@ const App = {
         title,
         duration: document.getElementById('new-video-dur').value || '00:00',
         status: document.getElementById('new-video-status').value,
-        thumbnailUrl: document.getElementById('new-video-thumb').value || 'https://via.placeholder.com/400x225?text=Video',
+        thumbnailUrl: document.getElementById('new-video-thumb').value || '',
         sourceProvider: 'Manual',
         sourceFolder: 'Upload',
         createdAt: Date.now()
@@ -1705,18 +1781,22 @@ const App = {
   },
 
   async resetData() {
-    if (confirm('AVISO: Isso apagará TODOS os dados locais e fará logout da sua conta. Deseja continuar com o Limpeza Profunda?')) {
-      try {
-        await AuthManager.signOut();
-        SyncManager.reset();
-      } catch (e) {
-        console.error('Logout error during reset:', e);
-      }
-      localStorage.removeItem(STORAGE_KEY);
-      localStorage.removeItem('clipper_os_data');
-      sessionStorage.clear();
-      location.reload();
-    }
+    this.showConfirm(
+      'Isso apagará <strong>todos os dados locais</strong> e fará logout da sua conta. Esta ação não pode ser desfeita.',
+      async () => {
+        try {
+          await AuthManager.signOut();
+          SyncManager.reset();
+        } catch (e) {
+          console.error('Logout error during reset:', e);
+        }
+        localStorage.removeItem(STORAGE_KEY);
+        localStorage.removeItem('clipper_os_data');
+        sessionStorage.clear();
+        location.reload();
+      },
+      { title: 'Limpeza profunda', confirmLabel: 'Apagar tudo', danger: true }
+    );
   },
 
   ensureTodaySlots() {
@@ -1795,11 +1875,13 @@ const App = {
   },
 
   deleteLibraryItem(id) {
-    if (!confirm('Excluir este item permanentemente?')) return;
-    this.state.library = this.state.library.filter(i => i.id !== id);
-    this.state.routine.forEach(r => { if (r.assetId === id) { r.assetId = null; r.source = null; } });
-    saveState(this.state);
-    this.render();
+    this.showConfirm('Este item será removido permanentemente da biblioteca. Esta ação não pode ser desfeita.', () => {
+      this.state.library = this.state.library.filter(i => i.id !== id);
+      this.state.routine.forEach(r => { if (r.assetId === id) { r.assetId = null; r.source = null; } });
+      saveState(this.state);
+      this.render();
+      this.showToast('Item removido da biblioteca.', 'info');
+    }, { title: 'Excluir item', confirmLabel: 'Excluir' });
   },
 
   // ─── Clip Actions ───────────────────────────────────
@@ -1865,11 +1947,13 @@ const App = {
   },
 
   deleteClip(id) {
-    if (!confirm('Excluir este clipe?')) return;
-    this.state.clips = this.state.clips.filter(c => c.id !== id);
-    this.state.routine.forEach(r => { if (r.assetId === id) { r.assetId = null; r.source = null; } });
-    saveState(this.state);
-    this.render();
+    this.showConfirm('Este clipe será excluído permanentemente, incluindo seu gancho e CTA. Esta ação não pode ser desfeita.', () => {
+      this.state.clips = this.state.clips.filter(c => c.id !== id);
+      this.state.routine.forEach(r => { if (r.assetId === id) { r.assetId = null; r.source = null; } });
+      saveState(this.state);
+      this.render();
+      this.showToast('Clipe excluído.', 'info');
+    }, { title: 'Excluir clipe', confirmLabel: 'Excluir' });
   },
 
   // ─── Pipeline / Scheduling Actions ──────────────────
@@ -1898,7 +1982,7 @@ const App = {
         <div class="flex items-center gap-3 p-4 bg-blue-50 rounded-2xl border border-blue-100">
           ${asset?.thumbnailUrl ? `<img src="${asset.thumbnailUrl}" class="w-12 h-12 rounded-lg object-cover" />` : `<div class="w-12 h-12 rounded-lg bg-white flex items-center justify-center text-blue-500 shadow-sm"><i class="fa-solid fa-file-video"></i></div>`}
           <div class="flex-1 min-w-0">
-             <div class="text-[9px] font-black text-blue-400 uppercase tracking-widest">Agendando Conteúdo</div>
+             <div class="text-[11px] font-bold text-blue-400 uppercase tracking-wide">Agendando Conteúdo</div>
              <div class="text-sm font-bold text-slate-800 truncate">${escapeHtml(asset?.title || asset?.name || 'Item')}</div>
           </div>
         </div>
@@ -1980,17 +2064,16 @@ const App = {
 
   deleteSlot(id) {
     const slot = this.state.routine.find(r => r.id === id);
-    if (slot && slot.assetId) {
-      const confirmMsg = 'Este slot tem conteúdo agendado. Deseja mesmo excluir o slot e desvincular o conteúdo?';
-      if (!confirm(confirmMsg)) {
-        return;
-      }
-    }
-
-    NotificationManager.cancelForSlot(id);
-    this.state.routine = this.state.routine.filter(r => r.id !== id);
-    saveState(this.state);
-    this.render();
+    const msg = slot?.assetId
+      ? 'Este slot tem conteúdo agendado. Excluir irá desvincular o conteúdo automaticamente.'
+      : 'Este horário operacional será removido do pipeline.';
+    this.showConfirm(msg, () => {
+      NotificationManager.cancelForSlot(id);
+      this.state.routine = this.state.routine.filter(r => r.id !== id);
+      saveState(this.state);
+      this.render();
+      this.showToast('Slot removido.', 'info');
+    }, { title: 'Remover slot', confirmLabel: 'Remover' });
   },
 
   unscheduleAsset(slotId) {
@@ -2331,6 +2414,19 @@ const App = {
     this.showToast('Exportação concluída!', 'success');
   },
 
+  // ─── Confirm Dialog ─────────────────────────────────
+  showConfirm(message, onConfirm, { title = 'Confirmar ação', confirmLabel = 'Excluir', danger = true } = {}) {
+    const body = `<p class="text-slate-600 text-sm leading-relaxed">${message}</p>`;
+    const footer = `
+      <div class="flex gap-3">
+        <button id="confirm-cancel-btn" class="flex-1 py-3 rounded-xl border border-slate-200 text-slate-600 font-semibold text-sm hover:bg-slate-50 transition">Cancelar</button>
+        <button id="confirm-ok-btn" class="flex-1 py-3 rounded-xl ${danger ? 'bg-red-600 hover:bg-red-700' : 'bg-blue-600 hover:bg-blue-700'} text-white font-bold text-sm shadow-md transition active:scale-95">${confirmLabel}</button>
+      </div>`;
+    this.openModal(title, body, footer);
+    document.getElementById('confirm-cancel-btn').onclick = () => this.closeModal();
+    document.getElementById('confirm-ok-btn').onclick = () => { this.closeModal(); onConfirm(); };
+  },
+
   // ─── Modal ──────────────────────────────────────────
   openModal(title, bodyHTML, footerHTML) {
     document.getElementById('modal-title').innerText = title;
@@ -2362,27 +2458,27 @@ const App = {
   showToast(message, type = 'info') {
     const container = document.getElementById('toast-container');
     if (!container) return;
+
+    const colors = { success: '#10b981', error: '#ef4444', warning: '#f59e0b', info: '#6366f1' };
+    const icons  = { success: 'fa-circle-check', error: 'fa-circle-exclamation', warning: 'fa-triangle-exclamation', info: 'fa-circle-info' };
+    const color  = colors[type] || colors.info;
+
     const toast = document.createElement('div');
-    const styles = {
-      success: 'bg-green-800 text-green-50',
-      error: 'bg-red-800 text-red-50',
-      warning: 'bg-amber-800 text-amber-50',
-      info: 'bg-slate-800 text-slate-50',
-    };
-    const icons = {
-      success: 'fa-check-circle',
-      error: 'fa-triangle-exclamation',
-      warning: 'fa-exclamation',
-      info: 'fa-info-circle',
-    };
-    toast.className = `${styles[type]} px-4 py-3 rounded-xl shadow-xl flex items-center gap-3 text-sm font-medium toast-enter pointer-events-auto`;
-    toast.innerHTML = `<i class="fa-solid ${icons[type]} text-lg opacity-90"></i><span>${escapeHtml(message)}</span>`;
+    toast.className = 'ui-toast toast-enter';
+    toast.style.setProperty('--toast-color', color);
+    toast.innerHTML = `
+      <i class="fa-solid ${icons[type] || icons.info} ui-toast-icon"></i>
+      <span class="ui-toast-msg">${escapeHtml(message)}</span>
+      <button class="ui-toast-close" onclick="this.closest('.ui-toast').remove()">
+        <i class="fa-solid fa-xmark"></i>
+      </button>`;
     container.appendChild(toast);
+
     setTimeout(() => {
       toast.classList.remove('toast-enter');
       toast.classList.add('toast-exit');
       setTimeout(() => toast.remove(), 300);
-    }, 3000);
+    }, 3500);
   },
 };
 
