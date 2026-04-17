@@ -20,6 +20,7 @@ export const SyncManager = {
   userId: null,
   channel: null,
   enabled: false,
+  _saveTimer: null,
 
   async init() {
     if (!AuthManager.client || !AuthManager.user) {
@@ -38,19 +39,22 @@ export const SyncManager = {
     }
   },
 
-  async save(state) {
+  save(state) {
     if (!this.enabled || !this.userId) return;
-    try {
-      const { error } = await this.client
-        .from('app_state')
-        .upsert(
-          { user_id: this.userId, state, updated_at: new Date().toISOString() },
-          { onConflict: 'user_id' },
-        );
-      if (error) console.warn('[SyncManager] save error:', error.message);
-    } catch (e) {
-      console.warn('[SyncManager] save error:', e);
-    }
+    clearTimeout(this._saveTimer);
+    this._saveTimer = setTimeout(async () => {
+      try {
+        const { error } = await this.client
+          .from('app_state')
+          .upsert(
+            { user_id: this.userId, state, updated_at: new Date().toISOString() },
+            { onConflict: 'user_id' },
+          );
+        if (error) console.warn('[SyncManager] save error:', error.message);
+      } catch (e) {
+        console.warn('[SyncManager] save error:', e);
+      }
+    }, 500);
   },
 
   async load() {
@@ -75,6 +79,11 @@ export const SyncManager = {
 
   subscribe(onUpdate) {
     if (!this.enabled || !this.userId) return;
+
+    // Disconnect any existing channel before creating a new one
+    if (this.channel) {
+      this.disconnect();
+    }
 
     this.channel = this.client
       .channel('app_state_changes')
@@ -102,6 +111,8 @@ export const SyncManager = {
   },
 
   reset() {
+    clearTimeout(this._saveTimer);
+    this._saveTimer = null;
     this.disconnect();
     this.client = null;
     this.userId = null;

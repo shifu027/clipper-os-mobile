@@ -4,7 +4,13 @@ import { NotificationManager } from './notifications.js';
 import { AuthManager } from './auth.js';
 import { SyncManager } from './supabase.js';
 import { CalendarManager } from './calendar.js';
-import { loadState, saveState, migrateState, STORAGE_KEY, generateId } from './state.js';
+import { loadState, saveState, migrateState, mergeStates, STORAGE_KEY, generateId } from './state.js';
+import { renderDashboard } from './views/DashboardView.js';
+import { renderLibrary }   from './views/LibraryView.js';
+import { renderClipper }   from './views/ClipperView.js';
+import { renderHistory, renderHistoryItem } from './views/HistoryView.js';
+import { renderAdmin }     from './views/AdminView.js';
+import { renderGemini }    from './views/GeminiView.js';
 import { VideoManagerUI } from './videoManager.js';
 import { PROVIDERS, getConnector } from './cloudConnectors.js';
 import { escapeHtml, formatDate, todayStr, csvEscape, PLATFORMS, TAGS, getSocialDeepLink } from './utils.js';
@@ -89,11 +95,13 @@ function initBackground() {
     renderer.setSize(window.innerWidth, window.innerHeight);
   }
 
-  window.addEventListener('resize', onWindowResize);
-  window.addEventListener('mousemove', (e) => {
+  function onMouseMove(e) {
     mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
     mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
-  });
+  }
+
+  window.addEventListener('resize', onWindowResize);
+  window.addEventListener('mousemove', onMouseMove);
 
   function render() {
     let vertexIndex = 0;
@@ -166,6 +174,14 @@ function initBackground() {
 
   document.addEventListener('visibilitychange', handleVisibilityChange);
   render();
+
+  return function destroyBackground() {
+    cancelAnimationFrame(animationFrameId);
+    window.removeEventListener('resize', onWindowResize);
+    window.removeEventListener('mousemove', onMouseMove);
+    document.removeEventListener('visibilitychange', handleVisibilityChange);
+    renderer.dispose();
+  };
 }
 
 // ─── App Controller ─────────────────────────────────────
@@ -174,6 +190,8 @@ const App = {
   state: null, // Will be loaded in init
   syncStatus: 'offline', // 'offline' | 'syncing' | 'synced'
   isAdmin: false,
+  _authSubscription: null,
+  _initializingApp: false,
 
   views: [
     { id: 'dashboard', icon: 'fa-house', name: 'Início' },
@@ -206,7 +224,10 @@ const App = {
     setupAuthForms();
 
     // ── Global Auth Listener ────────────────────────────
-    AuthManager.onAuthStateChange(async (event, session) => {
+    if (this._authSubscription) {
+      this._authSubscription.unsubscribe();
+    }
+    this._authSubscription = AuthManager.onAuthStateChange(async (event, session) => {
       console.log(`[Auth] Event: ${event}`);
 
       if (event === 'SIGNED_OUT') {
@@ -240,6 +261,11 @@ const App = {
   },
 
   async initApp() {
+    if (this._initializingApp) {
+      console.warn('[App] initApp() already in progress, skipping duplicate call.');
+      return;
+    }
+    this._initializingApp = true;
     console.log('[App] Initializing content...');
 
     // ── OAuth Callback Handling ─────────────────────────
@@ -254,15 +280,15 @@ const App = {
         if (connector) {
           const success = await connector.exchangeToken(code, state);
           if (success) {
+            // Only clean the URL after a confirmed successful exchange
+            window.history.replaceState({}, document.title, window.location.pathname);
             this.showToast(`${provider} conectado com sucesso!`, 'success');
           }
         }
       } catch (err) {
         console.error('[OAuth] Exchange failed:', err);
-        this.showToast(`Erro ao conectar ${provider}: ${err.message}`, 'error');
-      } finally {
-        // Clean URL to prevent re-exchange on refresh
-        window.history.replaceState({}, document.title, window.location.pathname);
+        // Do NOT clean the URL on failure — user can reload to retry
+        this.showToast(`Erro ao conectar ${provider}: ${err.message}. Recarregue a página para tentar novamente.`, 'error');
       }
     }
 
@@ -276,8 +302,8 @@ const App = {
     }
 
     // Boss Detection
-    const BOSS_EMAIL = 'boss@clipperos.com';
-    this.isAdmin = user?.email === BOSS_EMAIL;
+    const adminEmail = import.meta.env.VITE_ADMIN_EMAIL || '';
+    this.isAdmin = adminEmail && user?.email === adminEmail;
 
     // Add Admin View to the list if user is admin
     if (this.isAdmin && !this.views.find(v => v.id === 'admin')) {
@@ -299,10 +325,10 @@ const App = {
     if (syncEnabled) {
       const cloudState = await SyncManager.load();
       if (cloudState) {
-        this.state = migrateState({ ...this.state, ...cloudState });
+        this.state = migrateState(mergeStates(this.state, cloudState));
       }
       SyncManager.subscribe((newState) => {
-        this.state = migrateState({ ...this.state, ...newState });
+        this.state = migrateState(mergeStates(this.state, newState));
 
         // State Management Concurrency Guard
         const isEditing = ['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement?.tagName);
@@ -330,6 +356,8 @@ const App = {
         this.changeView('dashboard');
       }
     }, 100);
+
+    this._initializingApp = false;
   },
 
   bindGlobalEvents() {
@@ -385,7 +413,7 @@ const App = {
         if (sel) this.updatePerformance(sel.dataset.id, sel.value);
       });
 
-      // Drag-and-Drop Delegation
+      // Drag-and-Drop Delegation (mouse)
       content.addEventListener('dragstart', (e) => {
         const el = e.target.closest('.draggable-item');
         if (el) {
@@ -432,6 +460,51 @@ const App = {
           }
         }
       });
+
+      // Drag-and-Drop Delegation (touch — iOS/Android)
+      let _touchDragItem = null;
+      let _touchDragEl = null;
+
+      const _clearDropHighlights = () => {
+        content.querySelectorAll('[data-action="attach-content"]').forEach(z => {
+          (z.closest('.bg-white') || z).classList.remove('ring-2', 'ring-blue-500', 'bg-blue-50/50');
+        });
+      };
+
+      content.addEventListener('touchstart', (e) => {
+        const el = e.target.closest('.draggable-item');
+        if (!el) return;
+        _touchDragEl = el;
+        _touchDragItem = { id: el.dataset.id, source: el.dataset.source };
+        el.classList.add('opacity-50', 'scale-95');
+      }, { passive: true });
+
+      content.addEventListener('touchmove', (e) => {
+        if (!_touchDragItem) return;
+        e.preventDefault();
+        const touch = e.touches[0];
+        const elUnder = document.elementFromPoint(touch.clientX, touch.clientY);
+        const zone = elUnder?.closest('[data-action="attach-content"]');
+        _clearDropHighlights();
+        if (zone) {
+          (zone.closest('.bg-white') || zone).classList.add('ring-2', 'ring-blue-500', 'bg-blue-50/50');
+        }
+      }, { passive: false });
+
+      content.addEventListener('touchend', (e) => {
+        if (!_touchDragItem) return;
+        const touch = e.changedTouches[0];
+        const elUnder = document.elementFromPoint(touch.clientX, touch.clientY);
+        const zone = elUnder?.closest('[data-action="attach-content"]');
+        if (_touchDragEl) _touchDragEl.classList.remove('opacity-50', 'scale-95');
+        _clearDropHighlights();
+        if (zone) {
+          const slotId = zone.dataset.id;
+          if (_touchDragItem.id && slotId) this.attachToSlot(slotId, _touchDragItem.id, _touchDragItem.source);
+        }
+        _touchDragItem = null;
+        _touchDragEl = null;
+      });
     }
   },
 
@@ -477,6 +550,19 @@ const App = {
         break;
       case 'select-folder': this.selectCloudFolder(btn.dataset.provider, btn.dataset.type); break;
       case 'video-options': this.showVideoOptions(id); break;
+      case 'load-more-history': {
+        const offset = parseInt(btn.dataset.offset);
+        const PAGE = 50;
+        const hist = [...this.state.history].sort((a, b) => new Date(b.postedAt) - new Date(a.postedAt));
+        const list = document.getElementById('history-items-list');
+        if (list) {
+          hist.slice(offset, offset + PAGE).forEach(h => list.insertAdjacentHTML('beforeend', renderHistoryItem(h)));
+          const remaining = hist.length - (offset + PAGE);
+          if (remaining > 0) { btn.dataset.offset = offset + PAGE; btn.innerHTML = `<i class="fa-solid fa-chevron-down mr-2"></i> Carregar mais (${remaining} restantes)`; }
+          else btn.parentElement?.remove();
+        }
+        break;
+      }
     }
   },
 
@@ -531,256 +617,51 @@ const App = {
   render() {
     const content = document.getElementById('app-content');
     if (!content) return;
-    content.scrollTop = 0;
 
-    if (this.state.currentView === 'setup') {
-      content.innerHTML = this.getSetupHTML();
-      this.bindSetupEvents();
-      return;
+    try {
+      content.scrollTop = 0;
+      if (this.state.currentView !== 'history') this._historyLimit = 50;
+
+      if (this.state.currentView === 'setup') {
+        content.innerHTML = this.getSetupHTML();
+        this.bindSetupEvents();
+        return;
+      }
+
+      const renderers = {
+        dashboard: () => this.getDashboardHTML(),
+        videos: () => VideoManagerUI.renderVideoManager(this.state),
+        pipeline: () => this.getPipelineHTML(),
+        library: () => this.getLibraryHTML(),
+        clipper: () => this.getClipperHTML(),
+        history: () => this.getHistoryHTML(),
+        gemini: () => this.getGeminiHTML(),
+        admin: () => this.getAdminHTML(),
+      };
+
+      const renderer = renderers[this.state.currentView];
+      content.innerHTML = `<div class="fade-in max-w-6xl mx-auto w-full">${renderer ? renderer() : ''}</div>`;
+      this.bindViewEvents();
+    } catch (e) {
+      console.error('[App] Render failed:', e);
+      content.innerHTML = `<div class="p-8 text-center text-red-500"><i class="fa-solid fa-triangle-exclamation text-2xl mb-2"></i><p class="font-bold">Erro ao carregar a tela.</p><p class="text-sm text-slate-500 mt-1">Recarregue a página para continuar.</p></div>`;
     }
-
-    const renderers = {
-      dashboard: () => this.getDashboardHTML(),
-      videos: () => VideoManagerUI.renderVideoManager(this.state),
-      pipeline: () => this.getPipelineHTML(),
-      library: () => this.getLibraryHTML(),
-      clipper: () => this.getClipperHTML(),
-      history: () => this.getHistoryHTML(),
-      gemini: () => this.getGeminiHTML(),
-      admin: () => this.getAdminHTML(),
-    };
-
-    const renderer = renderers[this.state.currentView];
-    content.innerHTML = `<div class="fade-in max-w-6xl mx-auto w-full">${renderer ? renderer() : ''}</div>`;
-    this.bindViewEvents();
   },
 
   // ─── Dashboard ──────────────────────────────────────
   getDashboardHTML() {
-    const today = todayStr();
-    const todaysRoutine = this.state.routine.filter(r => r.date === today).sort((a, b) => a.time.localeCompare(b.time));
-
-    // Progress Calculation: Based on meta frequency or slots scheduled
-    const postsDone = this.state.history.filter(h => h.postedAt.startsWith(today)).length;
-    const metaGoal = parseInt(this.state.config.frequency) || 2;
-    const totalGoal = Math.max(todaysRoutine.length, metaGoal);
-    const progress = totalGoal === 0 ? 0 : Math.min(100, Math.round((postsDone / totalGoal) * 100));
-
-    const pendingClips = this.state.clips.filter(c => !['approved', 'aprovado'].includes(c.status)).length;
-    const libraryCount = this.state.library.length;
-    const viralCount = this.state.history.filter(h => h.performance === 'Viral').length;
-
-    const routineHTML = todaysRoutine.length === 0
-      ? `<div class="text-center py-8 text-slate-400 bg-slate-50 rounded-2xl border border-slate-100">
-           <i class="fa-solid fa-calendar-check text-3xl mb-3 text-slate-300"></i>
-           <p class="text-sm">Nenhum post agendado para hoje.</p>
-           <button data-action="goto-pipeline" class="mt-3 text-sm font-bold text-blue-600 hover:underline">Abrir Pipeline →</button>
-         </div>`
-      : todaysRoutine.map(slot => {
-          const asset = this.findAsset(slot.assetId, slot.source);
-          return `
-          <div class="flex items-center gap-4 p-4 bg-white rounded-2xl border ${slot.isPosted ? 'border-green-200 bg-green-50/30' : 'border-slate-200'} mb-3 shadow-sm transition-all group">
-            <div class="font-bold ${slot.isPosted ? 'text-green-600' : 'text-slate-800'} w-14 text-center">
-              <div class="text-lg">${escapeHtml(slot.time)}</div>
-              <div class="text-[9px] uppercase tracking-wide text-slate-400">${escapeHtml(slot.platform.split(' ')[0])}</div>
-            </div>
-            <div class="flex-1 border-l border-slate-100 pl-4">
-              ${asset
-                ? `<div class="text-sm font-bold ${slot.isPosted ? 'text-slate-500 line-through' : 'text-slate-800'}">${escapeHtml(asset.title)}</div>
-                   <div class="text-[10px] text-slate-400 mt-1 flex items-center gap-2">
-                     <span class="bg-slate-100 px-1.5 py-0.5 rounded text-slate-500"><i class="fa-solid ${slot.source === 'library' ? 'fa-folder' : 'fa-scissors'}"></i> ${slot.source === 'library' ? 'Biblioteca' : 'Clipes'}</span>
-                     ${asset.link ? `<i class="fa-solid fa-link text-blue-400"></i>` : ''}
-                   </div>`
-                : `<div class="text-xs text-slate-400 italic">Slot vazio — agende conteúdo da sua biblioteca.</div>`}
-            </div>
-            ${asset && !slot.isPosted ? `<button data-action="post-slot" data-id="${slot.id}" class="w-10 h-10 bg-blue-600 text-white rounded-full flex items-center justify-center hover:bg-blue-700 shadow-md transition-all active:scale-90 hover:scale-105 group-hover:rotate-12" title="Postar agora"><i class="fa-solid fa-paper-plane"></i></button>` : ''}
-            ${slot.isPosted ? `<div class="w-10 h-10 text-green-500 flex items-center justify-center text-xl animate-bounce"><i class="fa-solid fa-circle-check"></i></div>` : ''}
-          </div>`;
-        }).join('');
-
-    return `
-      <div class="flex justify-between items-end mb-6">
-        <div>
-          <h2 class="text-2xl md:text-3xl font-bold text-slate-800">Bem-vindo${this.state.config.channel ? ', ' + escapeHtml(this.state.config.channel) : ''}!</h2>
-          <p class="text-slate-500 text-sm mt-1">Sua visão geral de operações de conteúdo hoje.</p>
-        </div>
-      </div>
-
-      <div class="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 mb-8">
-        <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
-          <p class="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1"><i class="fa-solid fa-bullseye text-blue-500 mr-1"></i> Progresso Hoje</p>
-          <div class="flex items-end gap-2"><h3 class="text-2xl font-bold text-slate-800">${progress}%</h3></div>
-          <div class="w-full bg-slate-100 h-1.5 rounded-full mt-2 overflow-hidden"><div class="bg-blue-500 h-full rounded-full transition-all" style="width:${progress}%"></div></div>
-        </div>
-        <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
-          <p class="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1"><i class="fa-solid fa-check-double text-green-500 mr-1"></i> Publicado</p>
-          <h3 class="text-2xl font-bold text-slate-800">${postsDone} <span class="text-xs font-normal text-slate-400">/ ${totalGoal}</span></h3>
-        </div>
-        <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm cursor-pointer hover:border-amber-300" data-action="goto-clipper">
-          <p class="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1"><i class="fa-solid fa-scissors text-amber-500 mr-1"></i> Clipes Pendentes</p>
-          <h3 class="text-2xl font-bold text-slate-800">${pendingClips}</h3>
-        </div>
-        <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm cursor-pointer hover:border-purple-300" data-action="goto-library">
-          <p class="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1"><i class="fa-solid fa-photo-film text-purple-500 mr-1"></i> Itens na Biblioteca</p>
-          <h3 class="text-2xl font-bold text-slate-800">${libraryCount}</h3>
-        </div>
-      </div>
-
-      <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div class="lg:col-span-2">
-          <div class="flex justify-between items-center mb-4">
-            <h3 class="font-bold text-lg text-slate-800">Agenda de Hoje</h3>
-            <button data-action="goto-pipeline" class="text-sm text-blue-600 font-bold hover:underline">Ver Pipeline →</button>
-          </div>
-          <div class="bg-slate-50 p-2 md:p-4 rounded-3xl border border-slate-200">
-            ${routineHTML}
-          </div>
-        </div>
-
-        <div>
-          <div class="bg-gradient-to-br from-slate-800 to-slate-900 rounded-3xl p-6 text-white shadow-lg">
-            <h3 class="font-bold mb-2 flex items-center gap-2"><i class="fa-solid fa-chart-line"></i> Estatísticas Rápidas</h3>
-            <p class="text-xs text-slate-300 mb-4">Desempenho total de publicações.</p>
-            <div class="space-y-3">
-              <div class="bg-white/10 border border-white/10 p-3 rounded-xl flex items-center gap-3">
-                <i class="fa-solid fa-check-circle text-green-400"></i>
-                <div><div class="text-sm font-bold">${this.state.history.length}</div><div class="text-[10px] text-slate-400">Total Publicado</div></div>
-              </div>
-              <div class="bg-white/10 border border-white/10 p-3 rounded-xl flex items-center gap-3">
-                <i class="fa-solid fa-fire text-orange-400"></i>
-                <div><div class="text-sm font-bold">${this.state.history.filter(h => h.performance === 'Viral').length}</div><div class="text-[10px] text-slate-400">Posts Virais</div></div>
-              </div>
-              <div class="bg-white/10 border border-white/10 p-3 rounded-xl flex items-center gap-3">
-                <i class="fa-solid fa-box-open text-blue-400"></i>
-                <div><div class="text-sm font-bold">${this.state.library.length + this.state.clips.filter(c => c.status === 'approved').length}</div><div class="text-[10px] text-slate-400">Pronto para Publicar</div></div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>`;
+    return renderDashboard(this.state, this.findAsset.bind(this));
   },
 
-  // ─── Library ────────────────────────────────────────
+
+  // ─── Library ────────────────────────────────────
   getLibraryHTML() {
-    const lib = this.state.library;
-    const libHTML = lib.length === 0
-      ? `<div class="col-span-full py-16 text-center text-slate-400 border-2 border-dashed border-slate-200 rounded-3xl bg-white">
-           <i class="fa-solid fa-folder-open text-5xl mb-4 text-slate-300"></i>
-           <p class="text-sm">Sua biblioteca de conteúdo está vazia.</p>
-           <p class="text-xs mt-1 text-slate-400">Adicione ativos finalizados prontos para agendamento.</p>
-         </div>`
-      : lib.map(item => `
-          <div class="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm hover:shadow-md transition flex flex-col justify-between h-full">
-            <div>
-              <div class="flex justify-between items-start mb-3">
-                <div class="flex gap-1 flex-wrap">
-                  ${(item.tags || []).map(t => `<span class="tag-pill tag-${TAGS.includes(t) ? t : 'default'}">${escapeHtml(t)}</span>`).join('')}
-                </div>
-                <button data-action="delete-lib" data-id="${item.id}" class="text-slate-300 hover:text-red-500 transition-colors"><i class="fa-solid fa-trash"></i></button>
-              </div>
-              <h4 class="font-bold text-slate-800 text-base leading-tight mb-2">${escapeHtml(item.title)}</h4>
-              <p class="text-xs text-slate-500 mb-4 flex items-center gap-1.5">
-                <i class="fa-solid ${(item.type || '').includes('Video') || (item.type || '').includes('Vídeo') ? 'fa-video' : 'fa-image'} text-slate-400"></i> ${escapeHtml(item.type)}
-              </p>
-            </div>
-            <div class="flex gap-2 border-t border-slate-100 pt-4">
-              <button data-action="schedule-asset" data-id="${item.id}" data-source="library" class="flex-1 bg-slate-900 text-white text-xs py-2.5 rounded-xl font-bold hover:bg-slate-800 shadow-md active:scale-95 transition-transform"><i class="fa-solid fa-calendar-plus mr-1"></i> Agendar</button>
-              ${item.link ? `<a href="${escapeHtml(item.link)}" target="_blank" rel="noopener noreferrer" class="bg-slate-100 text-slate-600 text-xs px-4 py-2.5 rounded-xl hover:bg-slate-200 font-medium transition-colors inline-flex items-center"><i class="fa-solid fa-cloud-arrow-down"></i></a>` : ''}
-            </div>
-          </div>
-        `).join('');
-
-    return `
-      <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
-        <div>
-          <h2 class="text-2xl font-bold text-slate-800">Biblioteca de Conteúdo</h2>
-          <p class="text-sm text-slate-500 mt-1">Conteúdo finalizado pronto para agendamento e publicação.</p>
-        </div>
-        <button data-action="add-library" class="w-full md:w-auto bg-blue-600 text-white px-5 py-2.5 rounded-xl text-sm font-bold shadow-md hover:bg-blue-700 transition flex items-center justify-center gap-2"><i class="fa-solid fa-plus"></i> Novo Conteúdo</button>
-      </div>
-
-      <div class="flex gap-2 overflow-x-auto hide-scrollbar pb-4 mb-2">
-        <button class="tag-pill bg-slate-800 text-white whitespace-nowrap">Todos</button>
-        ${TAGS.map(t => `<button class="tag-pill tag-${t} whitespace-nowrap bg-white hover:bg-slate-50">#${t}</button>`).join('')}
-      </div>
-
-      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-        ${libHTML}
-      </div>`;
+    return renderLibrary(this.state);
   },
 
-  // ─── Clipper (Clips Manager) ────────────────────────
+  // ─── Clipper (Clips Manager) ────────────────────
   getClipperHTML() {
-    const clips = this.state.clips;
-    const statusStyles = {
-      raw: { color: 'slate', icon: 'fa-box', label: 'Bruto' },
-      bruto: { color: 'slate', icon: 'fa-box', label: 'Bruto' },
-      editing: { color: 'amber', icon: 'fa-scissors', label: 'Editando' },
-      editando: { color: 'amber', icon: 'fa-scissors', label: 'Editando' },
-      approved: { color: 'green', icon: 'fa-check-double', label: 'Aprovado' },
-      aprovado: { color: 'green', icon: 'fa-check-double', label: 'Aprovado' },
-    };
-
-    const clipsHTML = clips.length === 0
-      ? `<div class="py-16 text-center text-slate-400 border-2 border-dashed border-slate-200 rounded-3xl w-full bg-white">
-           <i class="fa-solid fa-film text-5xl mb-4 text-slate-300"></i>
-           <p class="text-sm">Nenhum clipe na fila.</p>
-           <p class="text-xs mt-1 text-slate-400">Comece recortando segmentos do seu conteúdo longo.</p>
-         </div>`
-      : clips.map(c => {
-          const st = statusStyles[c.status] || statusStyles.raw;
-          return `
-          <div class="bg-white border-l-4 border-${st.color}-500 rounded-r-2xl rounded-l-md p-5 shadow-sm mb-4 hover:shadow-md transition">
-            <div class="flex justify-between items-start mb-3">
-              <div class="flex items-center gap-2">
-                <span class="text-[10px] font-bold px-2 py-0.5 rounded bg-${st.color}-50 text-${st.color}-600 uppercase flex items-center gap-1 border border-${st.color}-100"><i class="fa-solid ${st.icon}"></i> ${st.label}</span>
-                <span class="text-xs text-slate-500 font-bold bg-slate-100 px-2 py-0.5 rounded-md"><i class="fa-regular fa-clock text-slate-400"></i> ${escapeHtml(c.minIn)} – ${escapeHtml(c.minOut)}</span>
-              </div>
-              <div class="flex gap-1">
-                <button data-action="cycle-clip" data-id="${c.id}" class="text-slate-400 hover:text-blue-500 w-8 h-8 rounded-lg flex items-center justify-center transition-colors"><i class="fa-solid fa-arrows-rotate"></i></button>
-                <button data-action="delete-clip" data-id="${c.id}" class="text-slate-400 hover:text-red-500 w-8 h-8 rounded-lg flex items-center justify-center transition-colors"><i class="fa-solid fa-trash"></i></button>
-              </div>
-            </div>
-
-            <h4 class="font-bold text-slate-800 text-lg mb-2 leading-tight">${escapeHtml(c.title)}</h4>
-
-            ${c.hook ? `<div class="bg-slate-50 rounded-xl p-3 border border-slate-100 mb-3 space-y-2">
-              <p class="text-xs text-slate-600"><strong class="text-slate-800">Gancho (0-3s):</strong> ${escapeHtml(c.hook)}</p>
-              ${c.cta ? `<p class="text-xs text-slate-600"><strong class="text-slate-800">CTA:</strong> ${escapeHtml(c.cta)}</p>` : ''}
-            </div>` : ''}
-
-            <div class="flex justify-between items-center mt-4 pt-4 border-t border-slate-100">
-              <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider"><i class="fa-solid fa-bullhorn mr-1"></i> ${escapeHtml(c.platform || 'Multi-plataforma')}</span>
-              ${c.status === 'approved' || c.status === 'aprovado'
-                ? `<button data-action="schedule-asset" data-id="${c.id}" data-source="clip" class="bg-blue-600 text-white text-xs px-4 py-2 rounded-xl font-bold hover:bg-blue-700 shadow-md active:scale-95 transition-transform"><i class="fa-solid fa-calendar-plus mr-1"></i> Agendar</button>`
-                : `<button data-action="cycle-clip" data-id="${c.id}" class="text-xs font-semibold text-${st.color}-600 underline">Avançar Estágio →</button>`}
-            </div>
-          </div>`;
-        }).join('');
-
-    return `
-      <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
-        <div>
-          <h2 class="text-2xl font-bold text-slate-800">Gerenciador de Clipes</h2>
-          <p class="text-sm text-slate-500 mt-1">Acompanhe clipes desde o material bruto até o aprovado e pronto para publicar.</p>
-        </div>
-        <button data-action="add-clip" class="w-full md:w-auto bg-slate-900 text-white px-5 py-2.5 rounded-xl text-sm font-bold shadow-md hover:bg-slate-800 transition flex items-center justify-center gap-2"><i class="fa-solid fa-scissors"></i> Novo Clipe</button>
-      </div>
-
-      <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div class="lg:col-span-2 space-y-2">${clipsHTML}</div>
-        <div>
-          <div class="bg-white p-5 rounded-3xl shadow-sm border border-slate-200 sticky top-4">
-            <h3 class="font-bold text-slate-800 mb-3 border-b border-slate-100 pb-2"><i class="fa-solid fa-list-check text-blue-500 mr-2"></i> Guia de Workflow</h3>
-            <ol class="text-sm text-slate-600 space-y-3 pl-2">
-              <li class="flex gap-2"><span class="font-bold text-slate-400">1.</span> Registre tempos de clipes de podcasts, lives ou vídeos longos.</li>
-              <li class="flex gap-2"><span class="font-bold text-slate-400">2.</span> Escreva um gancho forte para os primeiros 3 segundos.</li>
-              <li class="flex gap-2"><span class="font-bold text-slate-400">3.</span> Mova para <span class="bg-amber-100 text-amber-700 px-1 rounded text-[10px] font-bold">Editando</span> quando estiver em progresso.</li>
-              <li class="flex gap-2"><span class="font-bold text-slate-400">4.</span> Marque como <span class="bg-green-100 text-green-700 px-1 rounded text-[10px] font-bold">Aprovado</span> e agende para publicação.</li>
-            </ol>
-          </div>
-        </div>
-      </div>`;
+    return renderClipper(this.state);
   },
 
   // ─── Pipeline / Calendar ────────────────────────────
@@ -954,238 +835,19 @@ const App = {
       </div>`;
   },
 
-  // ─── History / Analytics ────────────────────────────
+  // ─── History / Analytics ────────────────────────
   getHistoryHTML() {
-    const hist = [...this.state.history].sort((a, b) => new Date(b.postedAt) - new Date(a.postedAt));
-    const stats = {
-      total: hist.length,
-      viral: hist.filter(h => h.performance === 'Viral').length,
-      high: hist.filter(h => h.performance === 'High' || h.performance === 'Alto').length,
-    };
-
-    const platformCounts = {};
-    hist.forEach(h => {
-      const p = (h.platform || 'Other').split(' ')[0];
-      platformCounts[p] = (platformCounts[p] || 0) + 1;
-    });
-    const topPlatform = Object.entries(platformCounts).sort((a, b) => b[1] - a[1])[0];
-
-    const listHTML = hist.length === 0
-      ? `<div class="py-16 text-center text-slate-400 bg-white rounded-3xl border border-slate-200">
-           <i class="fa-solid fa-chart-line text-5xl mb-4 text-slate-300"></i>
-           <p class="text-sm">Nenhum conteúdo publicado ainda.</p>
-           <p class="text-xs mt-1 text-slate-400">Publique conteúdo do seu pipeline para construir seu histórico.</p>
-         </div>`
-      : hist.map(h => `
-          <div class="bg-white border border-slate-200 rounded-2xl p-4 md:p-5 shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-3 hover:shadow-md transition">
-            <div class="flex-1">
-              <div class="flex items-center gap-2 mb-2 flex-wrap">
-                <span class="text-[10px] font-bold px-2 py-0.5 rounded bg-slate-100 text-slate-600 border border-slate-200"><i class="fa-solid fa-bullhorn"></i> ${escapeHtml(h.platform || 'Geral')}</span>
-                <span class="text-[10px] font-medium text-slate-400"><i class="fa-regular fa-calendar-check mr-1"></i> ${formatDate(h.postedAt)}</span>
-                <span class="text-[10px] font-medium text-slate-400"><i class="fa-solid fa-folder-tree mr-1"></i> ${escapeHtml(h.category)}</span>
-                ${h.cloudMove ? `<span class="text-[10px] font-bold px-2 py-0.5 rounded ${h.cloudMove === 'Sucesso' ? 'bg-green-50 text-green-600 border-green-100' : 'bg-amber-50 text-amber-600 border-amber-100'} border ml-1"><i class="fa-solid fa-cloud-arrow-up mr-1"></i> Nuvem: ${h.cloudMove}</span>` : ''}
-              </div>
-              <h4 class="font-bold text-slate-800 text-sm md:text-base leading-tight">${escapeHtml(h.title)}</h4>
-            </div>
-            <div class="flex items-center gap-3 w-full md:w-auto mt-2 md:mt-0 border-t md:border-0 border-slate-100 pt-3 md:pt-0">
-              <div class="flex flex-col flex-1 md:flex-none">
-                <label class="text-[9px] font-bold text-slate-400 uppercase mb-1 ml-1">Performance</label>
-                <select data-action="set-perf" data-id="${h.id}" class="bg-slate-50 border border-slate-200 text-xs font-bold rounded-xl px-3 py-2.5 focus:ring-2 focus:ring-blue-500 outline-none w-full md:w-32 ${h.performance === 'Viral' ? 'text-orange-600 bg-orange-50 border-orange-200' : 'text-slate-600'}">
-                  <option value="Pending" ${h.performance === 'Pending' || h.performance === 'Pendente' ? 'selected' : ''}>⏳ Avaliar</option>
-                  <option value="Low" ${h.performance === 'Low' || h.performance === 'Baixo' ? 'selected' : ''}>Baixo</option>
-                  <option value="Medium" ${h.performance === 'Medium' || h.performance === 'Médio' ? 'selected' : ''}>Médio</option>
-                  <option value="High" ${h.performance === 'High' || h.performance === 'Alto' ? 'selected' : ''}>Alto</option>
-                  <option value="Viral" ${h.performance === 'Viral' ? 'selected' : ''}>🔥 Viral</option>
-                </select>
-              </div>
-              <button data-action="reuse-content" data-id="${h.id}" class="bg-blue-50 text-blue-600 text-xs font-bold px-4 py-2.5 rounded-xl hover:bg-blue-100 transition whitespace-nowrap self-end border border-blue-100 shadow-sm active:scale-95"><i class="fa-solid fa-recycle mr-1"></i> Reutilizar</button>
-            </div>
-          </div>
-        `).join('');
-
-    return `
-      <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
-        <div>
-          <h2 class="text-2xl font-bold text-slate-800">Histórico de Publicação</h2>
-          <p class="text-sm text-slate-500 mt-1">Acompanhe o desempenho e recicle seu melhor conteúdo.</p>
-        </div>
-      </div>
-
-      <div class="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 mb-8">
-        <div class="bg-white p-5 rounded-3xl border border-slate-200 shadow-sm text-center">
-          <div class="text-3xl font-bold text-slate-800">${stats.total}</div>
-          <div class="text-[10px] font-bold text-slate-400 uppercase tracking-wider mt-1">Total Posts</div>
-        </div>
-        <div class="bg-orange-50 p-5 rounded-3xl border border-orange-200 shadow-sm text-center">
-          <div class="text-3xl font-bold text-orange-600">${stats.viral}</div>
-          <div class="text-[10px] font-bold text-orange-500 uppercase tracking-wider mt-1">Viral 🔥</div>
-        </div>
-        <div class="bg-green-50 p-5 rounded-3xl border border-green-200 shadow-sm text-center">
-          <div class="text-3xl font-bold text-green-600">${stats.high}</div>
-          <div class="text-[10px] font-bold text-green-500 uppercase tracking-wider mt-1">Alta Perf</div>
-        </div>
-        <div class="bg-slate-900 p-5 rounded-3xl border border-slate-800 shadow-lg text-center">
-          <div class="text-3xl font-bold text-white">${topPlatform ? topPlatform[1] : 0}</div>
-          <div class="text-[10px] font-bold text-slate-400 uppercase tracking-wider mt-1">${topPlatform ? topPlatform[0] : 'Top Plataforma'}</div>
-        </div>
-      </div>
-
-      <div class="space-y-1">${listHTML}</div>`;
+    return renderHistory(this.state, this._historyLimit || 50);
   },
 
-  // ─── Admin Hub ──────────────────────────────────────
+  // ─── Admin Hub ──────────────────────────────────
   getAdminHTML() {
-    if (!this.isAdmin) return '<div class="p-8 text-center text-red-500 font-bold">Acesso Negado</div>';
-
-    return `
-      <div class="flex justify-between items-center mb-8">
-        <div>
-          <h2 class="text-3xl font-bold text-slate-900 tracking-tight">Painel Administrativo</h2>
-          <p class="text-slate-500 text-sm mt-1">Monitore usuários, clientes e a saúde do ecossistema.</p>
-        </div>
-        <div class="bg-blue-600 text-white px-4 py-2 rounded-2xl text-xs font-bold shadow-lg shadow-blue-600/20">MODO BOSS</div>
-      </div>
-
-      <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-        <div class="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm relative overflow-hidden group">
-          <i class="fa-solid fa-users text-blue-500/10 text-6xl absolute -right-4 -bottom-4 group-hover:scale-110 transition-transform"></i>
-          <p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Total de Usuários</p>
-          <h3 class="text-3xl font-bold text-slate-800">1.284</h3>
-          <p class="text-[10px] text-green-600 font-bold mt-2"><i class="fa-solid fa-caret-up"></i> +12% este mês</p>
-        </div>
-        <div class="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm relative overflow-hidden group">
-          <i class="fa-solid fa-clapperboard text-purple-500/10 text-6xl absolute -right-4 -bottom-4 group-hover:scale-110 transition-transform"></i>
-          <p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Clipes Processados</p>
-          <h3 class="text-3xl font-bold text-slate-800">45.2k</h3>
-          <p class="text-[10px] text-blue-600 font-bold mt-2"><i class="fa-solid fa-bolt"></i> Eficiência: 98.2%</p>
-        </div>
-        <div class="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm relative overflow-hidden group">
-          <i class="fa-solid fa-briefcase text-orange-500/10 text-6xl absolute -right-4 -bottom-4 group-hover:scale-110 transition-transform"></i>
-          <p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Clientes Ativos</p>
-          <h3 class="text-3xl font-bold text-slate-800">86</h3>
-          <p class="text-[10px] text-slate-400 font-bold mt-2">Plano Enterprise: 12</p>
-        </div>
-      </div>
-
-      <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        <div class="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
-          <div class="p-6 border-b border-slate-100 flex justify-between items-center">
-            <h3 class="font-bold text-slate-800">Registros Recentes</h3>
-            <button class="text-blue-600 text-xs font-bold hover:underline">Ver Todos</button>
-          </div>
-          <div class="divide-y divide-slate-50">
-            ${[
-              { name: 'João Silva', email: 'joao@exemplo.com', date: '2 min atrás', status: 'Ativo' },
-              { name: 'Alice Smith', email: 'alice@agency.co', date: '15 min atrás', status: 'Pendente' },
-              { name: 'Roberto Lee', email: 'robert@tech.io', date: '1 hora atrás', status: 'Ativo' },
-              { name: 'Sara Wilson', email: 'sara@clipper.com', date: '3 horas atrás', status: 'Ativo' }
-            ].map(user => `
-              <div class="p-4 flex items-center gap-4 hover:bg-slate-50 transition-colors">
-                <div class="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center font-bold text-slate-500 text-xs">${user.name[0]}</div>
-                <div class="flex-1">
-                  <div class="text-sm font-bold text-slate-800">${user.name}</div>
-                  <div class="text-[10px] text-slate-400">${user.email}</div>
-                </div>
-                <div class="text-right">
-                  <div class="text-[10px] font-bold text-slate-500 mb-1">${user.date}</div>
-                  <span class="text-[8px] font-bold uppercase px-1.5 py-0.5 rounded ${user.status === 'Ativo' ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'}">${user.status}</span>
-                </div>
-              </div>
-            `).join('')}
-          </div>
-        </div>
-
-        <div class="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
-           <div class="p-6 border-b border-slate-100">
-             <h3 class="font-bold text-slate-800">Visão Geral de Conteúdo (Global)</h3>
-           </div>
-           <div class="p-6">
-              <div class="space-y-4">
-                <div>
-                  <div class="flex justify-between text-[10px] font-bold text-slate-500 uppercase mb-2">
-                    <span>Engajamento TikTok</span>
-                    <span>84%</span>
-                  </div>
-                  <div class="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
-                    <div class="bg-slate-900 h-full rounded-full" style="width: 84%"></div>
-                  </div>
-                </div>
-                <div>
-                  <div class="flex justify-between text-[10px] font-bold text-slate-500 uppercase mb-2">
-                    <span>Crescimento Instagram</span>
-                    <span>62%</span>
-                  </div>
-                  <div class="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
-                    <div class="bg-blue-500 h-full rounded-full" style="width: 62%"></div>
-                  </div>
-                </div>
-                <div>
-                  <div class="flex justify-between text-[10px] font-bold text-slate-500 uppercase mb-2">
-                    <span>Retenção YouTube</span>
-                    <span>45%</span>
-                  </div>
-                  <div class="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
-                    <div class="bg-red-500 h-full rounded-full" style="width: 45%"></div>
-                  </div>
-                </div>
-              </div>
-
-              <div class="mt-8 pt-6 border-t border-slate-100 text-center">
-                <button class="bg-slate-900 text-white text-xs font-bold px-6 py-3 rounded-xl shadow-lg hover:shadow-slate-900/20 transition-all flex items-center justify-center gap-2 mx-auto">
-                  <i class="fa-solid fa-file-export"></i> Baixar Relatório de Auditoria Global
-                </button>
-              </div>
-           </div>
-        </div>
-      </div>
-    `;
+    return renderAdmin(this.isAdmin);
   },
 
   // ─── Gemini AI (Supabase Proxy Integration) ───────
   getGeminiHTML() {
-    // Enabled state (using the Supabase Edge Function Proxy)
-    const tools = [
-      { id: 'hooks', label: '🎣 Hooks' },
-      { id: 'titles', label: '📝 Títulos' },
-      { id: 'captions', label: '🏷️ Legendas' },
-      { id: 'scripts', label: '🎬 Roteiros' },
-    ];
-
-    return `
-      <div class="bg-gradient-to-br from-purple-800 via-purple-600 to-pink-500 rounded-3xl p-8 md:p-12 text-white shadow-xl relative overflow-hidden mb-8">
-        <i class="fa-solid fa-wand-magic-sparkles absolute -right-4 -bottom-4 text-[150px] opacity-10 transform -rotate-12"></i>
-        <h2 class="text-3xl md:text-4xl font-bold mb-3 relative z-10 tracking-tight">AI Studio</h2>
-        <p class="text-purple-100 text-sm md:text-base max-w-lg relative z-10 leading-relaxed">Gere roteiros de alta retenção, títulos magnéticos e descubra ângulos virais instantaneamente.</p>
-      </div>
-
-      <div class="bg-white rounded-3xl shadow-sm border border-slate-200 p-6 md:p-8">
-        <div class="space-y-6">
-          <div>
-            <label class="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 ml-1">Tópico / Assunto</label>
-            <input type="text" id="gemini-topic" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-5 py-4 text-sm focus:ring-2 focus:ring-purple-500 outline-none placeholder:text-slate-400 transition-all" placeholder="Ex: 3 formas de investir com pouco dinheiro...">
-          </div>
-
-          <div>
-            <label class="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 ml-1">O que gerar?</label>
-            <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
-              ${tools.map(t => `<button data-action="set-tool" data-tool="${t.id}" class="tool-btn py-3.5 rounded-xl text-sm font-bold border transition-all ${this.state.geminiTool === t.id ? 'bg-purple-100 text-purple-700 border-purple-300 shadow-sm' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'}">${t.label}</button>`).join('')}
-            </div>
-          </div>
-
-          <button id="btn-generate-ai" data-action="generate-ai" class="w-full bg-slate-900 text-white font-bold py-4 rounded-xl shadow-lg shadow-slate-900/20 hover:bg-slate-800 active:scale-[0.98] transition-all mt-2 flex items-center justify-center gap-2">
-            <i class="fa-solid fa-bolt text-yellow-400"></i>
-            <span id="ai-btn-text">Gerar Conteúdo</span>
-            <i id="ai-spinner" class="fa-solid fa-spinner fa-spin hidden"></i>
-          </button>
-        </div>
-
-        <div id="gemini-results" class="mt-8 pt-8 border-t border-slate-100">
-          <div class="text-center py-12 px-4 text-slate-400 text-sm border-2 border-dashed border-slate-200 rounded-2xl bg-slate-50">
-            <i class="fa-solid fa-robot text-4xl mb-4 text-slate-300"></i>
-            <p>Os resultados aparecerão aqui após a geração.</p>
-          </div>
-        </div>
-      </div>`;
+    return renderGemini(this.state);
   },
 
   // ─── Setup / Settings ──────────────────────────────
@@ -1564,21 +1226,26 @@ const App = {
 
               // Trigger initial sync for the selected folder
               this.showToast(`Sincronizando ${name}...`, 'info');
-              const files = await connector.listFiles(id);
-              files.forEach(f => {
-                if (!this.state.videoAssets.some(v => v.id === f.id)) {
-                  this.state.videoAssets.push({
-                    id: f.id,
-                    title: f.name || f.title,
-                    thumbnailUrl: f.thumbnail || f.thumbnailUrl,
-                    duration: f.duration || '00:00',
-                    status: 'novo',
-                    sourceProvider: provider,
-                    sourceFolder: name,
-                    createdAt: Date.now()
-                  });
-                }
-              });
+              try {
+                const files = await connector.listFiles(id);
+                files.forEach(f => {
+                  if (!this.state.videoAssets.some(v => v.id === f.id)) {
+                    this.state.videoAssets.push({
+                      id: f.id,
+                      title: f.name || f.title,
+                      thumbnailUrl: f.thumbnail || f.thumbnailUrl,
+                      duration: f.duration || '00:00',
+                      status: 'novo',
+                      sourceProvider: provider,
+                      sourceFolder: name,
+                      createdAt: Date.now()
+                    });
+                  }
+                });
+              } catch (syncErr) {
+                console.error('[Cloud] Initial sync failed:', syncErr);
+                this.showToast(syncErr.message || 'Erro ao sincronizar arquivos da pasta.', 'error');
+              }
             } else {
               conn.postedFolderId = id;
               conn.postedFolderName = name;
@@ -1644,11 +1311,11 @@ const App = {
         this.showToast('Vídeo marcado como pronto!', 'success');
       }
       if (action === 'delete-video') {
-        if (confirm('Remover vídeo da lista? (Não apagará na nuvem)')) {
+        this.confirmAction('Remover vídeo da lista? (Não apagará na nuvem)', () => {
           this.state.videoAssets = this.state.videoAssets.filter(v => v.id !== id);
           saveState(this.state);
           this.render();
-        }
+        }, 'Remover Vídeo');
       }
     }, { once: true });
   },
@@ -1705,18 +1372,13 @@ const App = {
   },
 
   async resetData() {
-    if (confirm('AVISO: Isso apagará TODOS os dados locais e fará logout da sua conta. Deseja continuar com o Limpeza Profunda?')) {
-      try {
-        await AuthManager.signOut();
-        SyncManager.reset();
-      } catch (e) {
-        console.error('Logout error during reset:', e);
-      }
+    this.confirmAction('AVISO: Isso apagará TODOS os dados locais e fará logout. Deseja continuar?', async () => {
+      try { await AuthManager.signOut(); SyncManager.reset(); } catch (e) { console.error('Logout error during reset:', e); }
       localStorage.removeItem(STORAGE_KEY);
       localStorage.removeItem('clipper_os_data');
       sessionStorage.clear();
       location.reload();
-    }
+    }, 'Limpeza Profunda');
   },
 
   ensureTodaySlots() {
@@ -1795,11 +1457,12 @@ const App = {
   },
 
   deleteLibraryItem(id) {
-    if (!confirm('Excluir este item permanentemente?')) return;
-    this.state.library = this.state.library.filter(i => i.id !== id);
-    this.state.routine.forEach(r => { if (r.assetId === id) { r.assetId = null; r.source = null; } });
-    saveState(this.state);
-    this.render();
+    this.confirmAction('Excluir este item permanentemente?', () => {
+      this.state.library = this.state.library.filter(i => i.id !== id);
+      this.state.routine.forEach(r => { if (r.assetId === id) { r.assetId = null; r.source = null; } });
+      saveState(this.state);
+      this.render();
+    }, 'Excluir Item');
   },
 
   // ─── Clip Actions ───────────────────────────────────
@@ -1865,11 +1528,12 @@ const App = {
   },
 
   deleteClip(id) {
-    if (!confirm('Excluir este clipe?')) return;
-    this.state.clips = this.state.clips.filter(c => c.id !== id);
-    this.state.routine.forEach(r => { if (r.assetId === id) { r.assetId = null; r.source = null; } });
-    saveState(this.state);
-    this.render();
+    this.confirmAction('Excluir este clipe?', () => {
+      this.state.clips = this.state.clips.filter(c => c.id !== id);
+      this.state.routine.forEach(r => { if (r.assetId === id) { r.assetId = null; r.source = null; } });
+      saveState(this.state);
+      this.render();
+    }, 'Excluir Clipe');
   },
 
   // ─── Pipeline / Scheduling Actions ──────────────────
@@ -1937,6 +1601,7 @@ const App = {
 
     if (!date || !time) return this.showToast('Data e hora são obrigatórios.', 'error');
     if (selectedPlats.length === 0) return this.showToast('Selecione pelo menos uma plataforma.', 'warning');
+    if (date < todayStr()) return this.showToast('Não é possível agendar em uma data passada.', 'error');
 
     selectedPlats.forEach(platform => {
       const slot = {
@@ -1982,9 +1647,13 @@ const App = {
     const slot = this.state.routine.find(r => r.id === id);
     if (slot && slot.assetId) {
       const confirmMsg = 'Este slot tem conteúdo agendado. Deseja mesmo excluir o slot e desvincular o conteúdo?';
-      if (!confirm(confirmMsg)) {
-        return;
-      }
+      this.confirmAction(confirmMsg, () => {
+        NotificationManager.cancelForSlot(id);
+        this.state.routine = this.state.routine.filter(r => r.id !== id);
+        saveState(this.state);
+        this.render();
+      }, 'Excluir Slot');
+      return;
     }
 
     NotificationManager.cancelForSlot(id);
@@ -2086,7 +1755,13 @@ const App = {
         }
       }
 
-      // Record in History
+      // Abort if cloud move failed — don't mark as posted
+      if (moveStatus === 'Falha' || moveStatus.startsWith('Erro:')) {
+        this.showToast('Publicação não confirmada: falha ao mover arquivo na nuvem.', 'error');
+        return;
+      }
+
+      // Record in History (only on success or when cloud move was not applicable)
       this.state.history.unshift({
         id: generateId(),
         assetId: asset.id,
@@ -2341,13 +2016,15 @@ const App = {
     const content = document.getElementById('global-modal-content');
     modal.classList.remove('hidden');
     modal.classList.add('flex');
-    setTimeout(() => {
+    clearTimeout(this._modalOpenTimer);
+    this._modalOpenTimer = setTimeout(() => {
       content.classList.remove('translate-y-full');
       content.classList.add('translate-y-0');
     }, 10);
   },
 
   closeModal() {
+    clearTimeout(this._modalOpenTimer);
     const modal = document.getElementById('global-modal');
     const content = document.getElementById('global-modal-content');
     content.classList.remove('translate-y-0');
@@ -2465,6 +2142,7 @@ function setupAuthForms() {
   // Auth tab event listeners (replaces inline onclick attributes)
   document.getElementById('tab-login')?.addEventListener('click', () => switchAuthTab('login'));
   document.getElementById('tab-signup')?.addEventListener('click', () => switchAuthTab('signup'));
+  document.getElementById('goto-login-btn')?.addEventListener('click', () => switchAuthTab('login'));
 
   // Login form
   document.getElementById('login-form')?.addEventListener('submit', async (e) => {
@@ -2624,5 +2302,5 @@ function setupAuthForms() {
 window.ClipperApp = App;
 document.addEventListener('DOMContentLoaded', () => {
   App.init();
-  initBackground();
+  window._destroyBackground = initBackground();
 });

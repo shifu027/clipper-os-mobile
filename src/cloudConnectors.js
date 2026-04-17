@@ -26,20 +26,23 @@ class CloudConnector {
       const state = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
       localStorage.setItem(`oauth_state_${this.provider}`, state);
 
-      // 1. Get OAuth URL from Edge Function
-      const { data, error } = await SyncManager.client.functions.invoke('cloud-auth', {
-        body: {
-          action: 'get_auth_url',
-          provider: this.provider,
-          state: state
-          // If you have a specific mobile redirect URI, pass it here
-          // redirect_uri: 'com.clipperos.app://oauth-callback'
+      // Detect native platform to use deep link redirect URI
+      let redirectUri;
+      try {
+        const { Capacitor } = await import('@capacitor/core');
+        if (Capacitor.isNativePlatform()) {
+          redirectUri = 'io.clipper.os://oauth-callback';
         }
-      });
+      } catch { /* running in web — no redirect_uri needed */ }
+
+      // 1. Get OAuth URL from Edge Function
+      const body = { action: 'get_auth_url', provider: this.provider, state };
+      if (redirectUri) body.redirect_uri = redirectUri;
+
+      const { data, error } = await SyncManager.client.functions.invoke('cloud-auth', { body });
 
       if (error) throw error;
       if (data && data.url) {
-        // For mobile apps (Capacitor), use Browser plugin or deep links
         window.open(data.url, '_blank');
         return true;
       }
@@ -51,49 +54,45 @@ class CloudConnector {
   }
 
   async listFiles(folderId) {
-    if (!SyncManager.client) return [];
+    if (!SyncManager.client) throw new Error('Supabase client not initialized');
 
-    try {
-      const { data, error } = await SyncManager.client.functions.invoke('cloud-proxy', {
-        body: { action: 'list_files', provider: this.provider, folderId }
-      });
+    const { data, error } = await SyncManager.client.functions.invoke('cloud-proxy', {
+      body: { action: 'list_files', provider: this.provider, folderId }
+    });
 
-      if (error) {
-         if (error.status === 404 || (error.message && error.message.includes('not connected'))) {
-           console.warn(`[Cloud] ${this.provider} not connected or token missing.`);
-         }
-         throw error;
-      }
-
-      return (data.files || []).map(f => ({
-        id: f.id,
-        title: f.name || f.title,
-        thumbnailUrl: f.thumbnail || f.thumbnailUrl || 'https://via.placeholder.com/400x225?text=Video',
-        duration: f.duration || '00:00',
-        sourceFolder: f.folderName || 'Cloud',
-        sourceProvider: this.provider,
-        link: f.link,
-        metadata: f.metadata || {}
-      }));
-    } catch (err) {
-      console.error(`[Cloud] listFiles error:`, err);
-      return [];
+    if (error) {
+      const isNotConnected = error.status === 404 || (error.message && error.message.includes('not connected'));
+      console.error(`[Cloud] listFiles error (${this.provider}):`, error);
+      throw isNotConnected
+        ? new Error(`${this.provider} não está conectado. Reconecte sua conta nas configurações.`)
+        : error;
     }
+
+    return (data.files || []).map(f => ({
+      id: f.id,
+      title: f.name || f.title,
+      thumbnailUrl: f.thumbnail || f.thumbnailUrl || 'https://via.placeholder.com/400x225?text=Video',
+      duration: f.duration || '00:00',
+      sourceFolder: f.folderName || 'Cloud',
+      sourceProvider: this.provider,
+      link: f.link,
+      metadata: f.metadata || {}
+    }));
   }
 
   async getFolders() {
-    if (!SyncManager.client) return [];
+    if (!SyncManager.client) throw new Error('Supabase client not initialized');
 
-    try {
-      const { data, error } = await SyncManager.client.functions.invoke('cloud-proxy', {
-        body: { action: 'list_folders', provider: this.provider }
-      });
-      if (error) throw error;
-      return data.folders || [];
-    } catch (err) {
-      console.error(`[Cloud] getFolders error:`, err);
-      return [];
+    const { data, error } = await SyncManager.client.functions.invoke('cloud-proxy', {
+      body: { action: 'list_folders', provider: this.provider }
+    });
+
+    if (error) {
+      console.error(`[Cloud] getFolders error (${this.provider}):`, error);
+      throw error;
     }
+
+    return data.folders || [];
   }
 
   async moveFile(fileId, toFolderId) {
@@ -124,7 +123,7 @@ class CloudConnector {
     }
 
     const { data, error } = await SyncManager.client.functions.invoke('cloud-auth', {
-      body: { action: 'exchange_token', provider: this.provider, code }
+      body: { action: 'exchange_token', provider: this.provider, code, state }
     });
 
     if (error) throw error;

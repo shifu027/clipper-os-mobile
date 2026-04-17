@@ -1,5 +1,10 @@
 import { createClient } from '@supabase/supabase-js';
 
+// Simple in-memory rate limiter for login attempts
+const _loginAttempts = { count: 0, resetAt: 0 };
+const LOGIN_MAX_ATTEMPTS = 5;
+const LOGIN_WINDOW_MS = 60_000; // 1 minute
+
 export const AuthManager = {
   client: null,
   user: null,
@@ -38,11 +43,22 @@ export const AuthManager = {
 
   async signIn(email, password) {
     if (!this.client) throw new Error('Supabase not configured');
-    const { data, error } = await this.client.auth.signInWithPassword({
-      email,
-      password,
-    });
+
+    // Rate limit: max 5 attempts per minute (client-side guard)
+    const now = Date.now();
+    if (now > _loginAttempts.resetAt) {
+      _loginAttempts.count = 0;
+      _loginAttempts.resetAt = now + LOGIN_WINDOW_MS;
+    }
+    if (_loginAttempts.count >= LOGIN_MAX_ATTEMPTS) {
+      const wait = Math.ceil((_loginAttempts.resetAt - now) / 1000);
+      throw new Error(`Muitas tentativas de login. Aguarde ${wait}s antes de tentar novamente.`);
+    }
+    _loginAttempts.count++;
+
+    const { data, error } = await this.client.auth.signInWithPassword({ email, password });
     if (error) throw error;
+    _loginAttempts.count = 0; // reset on success
     this.user = data.user;
     return data;
   },

@@ -10,7 +10,7 @@
     <meta name="description" content="Content management app for social media creators and clipper workflows">
 
     <!-- Camada 1: Content Security Policy (CSP) -->
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://unpkg.com 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://fonts.googleapis.com; img-src 'self' data: https:; connect-src 'self' https://*.supabase.co wss://*.supabase.co; font-src 'self' https://cdnjs.cloudflare.com https://fonts.gstatic.com https://r2cdn.perplexity.ai data:;">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://fonts.googleapis.com; img-src 'self' data: https:; connect-src 'self' https://*.supabase.co wss://*.supabase.co; font-src 'self' https://cdnjs.cloudflare.com https://fonts.gstatic.com data:;">
 
     <link rel="manifest" href="./manifest.webmanifest">
     <link rel="icon" type="image/png" sizes="192x192" href="./icons/icon-192x192.png">
@@ -70,7 +70,7 @@
           <p class="text-slate-500 text-sm mb-8 leading-relaxed px-4">
             Sua conta no Clipper OS foi criada com sucesso. Verifique seu e-mail para confirmar o cadastro e começar sua jornada.
           </p>
-          <button type="button" onclick="switchAuthTab('login')"
+          <button type="button" id="goto-login-btn"
             class="w-full py-3 bg-slate-900 text-white font-semibold rounded-xl shadow-md hover:shadow-lg transition-all">
             Ir para Login
           </button>

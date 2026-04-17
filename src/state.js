@@ -176,12 +176,37 @@ export async function loadState() {
   return { ...DEFAULT_STATE };
 }
 
+// Deep merge: arrays merged by id (cloud wins for existing, local-only items kept).
+// Prevents cloud sync from silently overwriting unsaved local changes.
+export function mergeStates(local, cloud) {
+  const byId = (localArr, cloudArr) => {
+    const cloudMap = new Map((cloudArr || []).map(i => [i.id, i]));
+    const merged = [...(cloudArr || [])];
+    (localArr || []).forEach(i => { if (!cloudMap.has(i.id)) merged.push(i); });
+    return merged;
+  };
+  return {
+    ...local,
+    ...cloud,
+    config: { ...local.config, ...cloud.config },
+    library:          byId(local.library,          cloud.library),
+    clips:            byId(local.clips,            cloud.clips),
+    routine:          byId(local.routine,          cloud.routine),
+    history:          byId(local.history,          cloud.history),
+    videoAssets:      byId(local.videoAssets,      cloud.videoAssets),
+    scheduledPosts:   byId(local.scheduledPosts,   cloud.scheduledPosts),
+    cloudConnections: cloud.cloudConnections || local.cloudConnections,
+  };
+}
+
 export function saveState(state) {
   const user = SyncManager.userId;
   const userKey = user ? `${STORAGE_KEY}_${user}` : STORAGE_KEY;
 
   localStorage.setItem(userKey, JSON.stringify(state));
   if (SyncManager.enabled) {
-    SyncManager.save(state);
+    SyncManager.save(state).catch(e => {
+      console.error('[State] Cloud save failed — local state is safe:', e);
+    });
   }
 }
