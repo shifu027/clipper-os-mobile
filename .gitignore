@@ -42,3 +42,14 @@ google-services.json
 
 # Android Profiling
 *.hprof
+# Added by code-review-graph
+.code-review-graph/
+
+# Agent/tool configs (local only)
+.agents/
+.superpowers/
+.claude/settings.local.json
+
+# Test artifacts
+coverage/
+.vitest-cache/
