@@ -5,7 +5,6 @@ android/.gradle
 android/app/build
 ios/App/build
 .DS_Store
-.env
 .env.local
 .env.production
 
