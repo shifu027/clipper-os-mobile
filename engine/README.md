@@ -39,6 +39,25 @@ engine/saida/<video>/
 
 Se o processo cair, rode de novo: transcrição, seleção e cortes já prontos são reaproveitados.
 
+## Enviar para o YouTube
+
+Os vídeos sobem como **privados**; você revisa e publica no YouTube Studio.
+
+Uma vez só:
+1. No [Google Cloud Console](https://console.cloud.google.com/), crie um projeto e ative a **YouTube Data API v3**.
+2. Crie um cliente OAuth do tipo **App para computador** e salve o JSON como `engine\credentials.json`.
+3. Em **Google Auth Platform → Público-alvo**, adicione a conta dona do canal como usuário de teste.
+
+```powershell
+cd engine
+uv run clipper enviar saida\<video> --lote 1
+uv run clipper enviar saida\<video> --lote 2 --compilado
+```
+
+Na primeira vez abre o navegador para você autorizar. Rodar de novo não reenvia o que já subiu
+(o id fica no `manifesto.json`). A cota padrão da API é de 100 envios por dia. Com o app em modo
+de teste, o Google expira a autorização a cada 7 dias.
+
 ## Ajustes (`engine/.env`)
 
 | Variável | Padrão | |
@@ -56,7 +75,7 @@ Durações e limites por plataforma ficam em `clipper_engine/config.py`.
   quem fala quando duas pessoas alternam. Sem rosto visível, usa o vídeo inteiro sobre fundo desfocado
   (isso também acontece se o caminho do arquivo tiver acentos e o OpenCV não conseguir abri-lo no Windows).
 - Vídeo com menos de ~20 min pode não render um compilado de 8 min; o manifesto avisa.
-- Postagem automática ainda não existe: os arquivos saem prontos para envio manual.
+- TikTok e Instagram: envio manual. YouTube: pelo comando `enviar`, sempre como privado.
 
 ## Testes
 

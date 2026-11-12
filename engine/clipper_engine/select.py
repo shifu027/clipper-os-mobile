@@ -9,14 +9,17 @@ Abaixo está a transcrição de um vídeo de {minutes} minutos. Cada linha come�
 
 Devolva:
 1. "clips": de 12 a 20 trechos de {clip_min} a {clip_max} segundos que funcionam sozinhos, sem contexto.
-   Cada um precisa abrir com um gancho forte nos 3 primeiros segundos e terminar numa frase completa.
+   Um corte bom sobrevive sem o resto do vídeo: abre num pensamento completo (se a primeira frase depende
+   do minuto anterior, descarte), tem uma virada (uma afirmação e depois algo que a prova ou complica)
+   e termina numa frase fechada, não num raciocínio pela metade.
    Notas de 0 a 100: hook (gancho), retention (prende até o fim), value (ensina/emociona/diverte), share (dá vontade de compartilhar).
    Seja exigente: nota acima de 85 só para trecho realmente excepcional.
 2. "highlights": de 8 a 12 melhores momentos de 40 a 90 segundos, que somados deem entre 8 e 12 minutos,
    para um compilado horizontal do YouTube. Podem repetir assuntos dos clips.
 
 Escreva title, hook, description e hashtags no idioma da transcrição. title com até 60 caracteres,
-hook com até 6 palavras (texto que aparece na tela), hashtags sem o símbolo #.
+hook com até 6 palavras: é o texto que aparece na tela nos 3 primeiros segundos e deve usar palavras
+DIFERENTES da primeira fala do corte. hashtags sem o símbolo #.
 start e end são segundos do vídeo original.
 
 TRANSCRIÇÃO:

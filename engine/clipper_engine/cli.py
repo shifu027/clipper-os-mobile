@@ -10,12 +10,22 @@ def main():
     cut.add_argument("video")
     cut.add_argument("--por-dia", type=int, default=3, help="cortes por lote/dia")
     cut.add_argument("--saida", default=None)
+    send = sub.add_parser("enviar", help="envia um lote para o YouTube como privado")
+    send.add_argument("pasta")
+    send.add_argument("--lote", type=int, help="número do lote (veja lotes.csv)")
+    send.add_argument("--compilado", action="store_true", help="envia também o compilado")
     sub.add_parser("servir", help="sobe o motor para o app (http://127.0.0.1:8000)")
     args = parser.parse_args()
 
     if args.cmd == "servir":
         import uvicorn
         uvicorn.run("clipper_engine.api:app", host="127.0.0.1", port=8000)
+        return
+
+    if args.cmd == "enviar":
+        from . import youtube
+        for video_id in youtube.send(args.pasta, args.lote, args.compilado):
+            print(f"https://studio.youtube.com/video/{video_id}/edit")
         return
 
     from . import pipeline

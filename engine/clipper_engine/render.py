@@ -31,18 +31,20 @@ def horizontal(src, start, end, ass, out: Path):
 
 def _cut(src, start, end, ass, vf, af, out):
     # ffmpeg roda dentro da pasta do corte: o filtro `ass` recebe só o nome do arquivo (sem escapar C:\ no Windows).
-    sub = out.with_suffix(".ass")
+    sub, part = out.with_suffix(".ass"), out.with_suffix(".part.mp4")
     sub.write_text(ass, encoding="utf-8")
     encode(["-ss", f"{start:.2f}", "-t", f"{end - start:.2f}", "-i", Path(src).resolve(),
-            "-vf", f"{vf},setsar=1,ass={sub.name}", "-af", af, "-r", "30"], [*AUDIO, out.name], cwd=out.parent)
+            "-vf", f"{vf},setsar=1,ass={sub.name}", "-af", af, "-r", "30"], [*AUDIO, part.name], cwd=out.parent)
     sub.unlink()
+    part.replace(out)  # se o ffmpeg cair no meio, a retomada não encontra um .mp4 truncado com o nome final
 
 
 def concat(parts, out: Path):
-    listing = out.with_suffix(".txt")
+    listing, part = out.with_suffix(".txt"), out.with_suffix(".part.mp4")
     listing.write_text("".join(f"file '{p.name}'\n" for p in parts), encoding="utf-8")
     run(["ffmpeg", "-y", "-v", "error", "-f", "concat", "-safe", "0", "-i", listing.name, "-c", "copy",
-         "-movflags", "+faststart", out.name], cwd=out.parent)
+         "-movflags", "+faststart", part.name], cwd=out.parent)
+    part.replace(out)
     listing.unlink()
-    for part in parts:
-        part.unlink()
+    for p in parts:
+        p.unlink()

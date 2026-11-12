@@ -8,6 +8,7 @@ from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
@@ -41,6 +42,7 @@ async def lifespan(_):
 
 
 app = FastAPI(title="Clipper Engine", lifespan=lifespan)
+app.add_middleware(TrustedHostMiddleware, allowed_hosts=["127.0.0.1", "localhost"])
 app.add_middleware(CORSMiddleware, allow_origin_regex=LOCAL, allow_methods=["*"], allow_headers=["*"])
 config.OUT.mkdir(parents=True, exist_ok=True)
 app.mount("/saida", StaticFiles(directory=config.OUT), name="saida")

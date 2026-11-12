@@ -1,4 +1,6 @@
-from clipper_engine import boundaries, captions, package, select
+import json
+
+from clipper_engine import boundaries, captions, package, pipeline, select, youtube
 
 WORDS = [{"w": f"p{i}", "s": i * 0.5, "e": i * 0.5 + 0.4} for i in range(2400)]  # 20 min, palavra a cada 0,5 s
 WORDS[100]["s"] = 50.3  # pausa de 0,4 s antes da palavra 100 (a 99 termina em 49,9)
@@ -50,3 +52,24 @@ def test_slug_and_caption():
 
 def test_transcript_lines_carry_timestamps():
     assert select.transcript_lines(WORDS[:60]).splitlines()[1].startswith("[12] ")
+
+
+def test_chapters_follow_youtube_rules():
+    three = [{"start": 0, "end": 60, "title": "a"}, {"start": 70, "end": 100, "title": "b"}, {"start": 200, "end": 215, "title": "c"}]
+    assert pipeline.chapters(three) == "00:00 a\n01:00 b\n01:30 c\n"
+    assert pipeline.chapters(three[:2]) is None
+    assert pipeline.chapters([*three[:2], {"start": 200, "end": 205, "title": "curto"}]) is None
+
+
+def test_youtube_send_uploads_only_the_batch_and_never_twice(tmp_path):
+    clips = [{**clip(0, 30, title=f"c{i}"), "file": f"cortes/{i}.mp4", "lote": lote} for i, lote in enumerate([1, 1, 2])]
+    (tmp_path / "manifesto.json").write_text(json.dumps({"clips": clips, "compilado": None}))
+    calls = []
+
+    def fake_upload(path, title, description, tags):
+        calls.append(title)
+        return f"id-{title}"
+
+    assert youtube.send(tmp_path, lote=1, upload=fake_upload) == ["id-c0", "id-c1"]
+    assert youtube.send(tmp_path, lote=1, upload=fake_upload) == [] and calls == ["c0", "c1"]
+    assert json.loads((tmp_path / "manifesto.json").read_text())["clips"][0]["youtube_id"] == "id-c0"
