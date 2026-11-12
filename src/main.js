@@ -6,6 +6,7 @@ import { SyncManager } from './supabase.js';
 import { CalendarManager } from './calendar.js';
 import { loadState, saveState, migrateState, STORAGE_KEY, generateId } from './state.js';
 import { VideoManagerUI } from './videoManager.js';
+import { CortesUI } from './cortes.js';
 import { PROVIDERS, getConnector } from './cloudConnectors.js';
 import { escapeHtml, formatDate, todayStr, csvEscape, PLATFORMS, TAGS, getSocialDeepLink } from './utils.js';
 
@@ -178,6 +179,7 @@ const App = {
   views: [
     { id: 'dashboard', icon: 'fa-house', name: 'Início' },
     { id: 'videos', icon: 'fa-clapperboard', name: 'Vídeos' },
+    { id: 'cortes', icon: 'fa-bolt', name: 'Cortes' },
     { id: 'pipeline', icon: 'fa-calendar-days', name: 'Pipeline' },
     { id: 'library', icon: 'fa-photo-film', name: 'Biblioteca' },
     { id: 'clipper', icon: 'fa-scissors', name: 'Clipes' },
@@ -542,6 +544,7 @@ const App = {
     const renderers = {
       dashboard: () => this.getDashboardHTML(),
       videos: () => VideoManagerUI.renderVideoManager(this.state),
+      cortes: () => CortesUI.render(),
       pipeline: () => this.getPipelineHTML(),
       library: () => this.getLibraryHTML(),
       clipper: () => this.getClipperHTML(),
@@ -2718,6 +2721,7 @@ function setupAuthForms() {
 
 // ─── Initialize ───────────────────────────────────────
 window.ClipperApp = App;
+CortesUI.init(App);
 document.addEventListener('DOMContentLoaded', () => {
   App.init();
   initBackground();
