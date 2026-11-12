@@ -1793,3 +1793,37 @@ body {
 @media (max-width: 400px) {
   #mobile-nav .nav-item span { font-size: 9px !important; }
 }
+
+/* ─── CORTES (Clipper Engine) — estende o Dark Cinema Vault ─── */
+.ct-body { padding: 1.25rem 1.5rem 7rem; display: grid; gap: 14px; }
+@media (min-width: 768px) { .ct-body { padding: 1.5rem 2.5rem 4rem; } }
+.ct-body h3 { font-family: 'Syne', sans-serif; font-weight: 700; font-size: 1.05rem; color: #f1f5f9; }
+.ct-panel { background: #111119; border: 1px solid rgba(255,255,255,0.06); border-radius: 12px; padding: 1.1rem 1.25rem; }
+.ct-note { font-size: 12px; color: #94a3b8; margin-top: 4px; line-height: 1.5; }
+.ct-note code { color: #c4b5fd; }
+.ct-error { font-size: 13px; color: #fca5a5; background: rgba(239,68,68,0.1); border: 1px solid rgba(239,68,68,0.3); border-radius: 10px; padding: 10px 12px; }
+.ct-warn { font-size: 12px; font-weight: 500; color: #fbbf24; }
+.ct-row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+.ct-row button { min-height: 44px; }
+.ct-input { flex: 1; min-width: 200px; min-height: 44px; background: #080810; border: 1px solid rgba(255,255,255,0.12); border-radius: 10px; padding: 0 12px; font-size: 13px; color: #e2e8f0; }
+.ct-input:focus-visible { outline: 2px solid #7c3aed; outline-offset: 1px; }
+.ct-steps { display: grid; gap: 12px; margin-top: 16px; }
+.ct-step { display: grid; grid-template-columns: 1fr auto; gap: 4px 8px; font-size: 12px; color: #64748b; }
+.ct-step.now { color: #f1f5f9; font-weight: 600; }
+.ct-step.done { color: #a7f3d0; }
+.ct-step-pct { font-variant-numeric: tabular-nums; }
+.ct-bar { grid-column: 1 / -1; height: 6px; background: rgba(255,255,255,0.07); border-radius: 99px; overflow: hidden; }
+.ct-bar span { display: block; height: 100%; background: #7c3aed; border-radius: 99px; transition: width 0.4s ease; }
+.ct-step.done .ct-bar span { background: #34d399; }
+.ct-bar-pulse { margin-top: 14px; animation: ct-pulse 1.2s ease-in-out infinite; }
+@keyframes ct-pulse { 50% { opacity: 0.4; } }
+.ct-results-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; }
+.ct-grid { padding: 0; }
+.ct-card video { width: 100%; aspect-ratio: 9 / 16; background: #000; display: block; }
+.ct-card-body { padding: 10px 12px 12px; }
+.ct-card-top { display: flex; align-items: center; justify-content: space-between; }
+.ct-score { font-family: 'Syne', sans-serif; font-weight: 800; font-size: 1.25rem; color: #c4b5fd; }
+.ct-lote { font-size: 11px; color: #94a3b8; }
+.ct-card-title { font-size: 13px; font-weight: 600; color: #e2e8f0; margin-top: 4px; line-height: 1.35; }
+.ct-wide { width: 100%; max-width: 720px; aspect-ratio: 16 / 9; background: #000; border-radius: 10px; margin-top: 12px; display: block; }
+@media (prefers-reduced-motion: reduce) { .ct-bar span { transition: none; } .ct-bar-pulse { animation: none; } }

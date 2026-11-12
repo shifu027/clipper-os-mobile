@@ -42,3 +42,11 @@ google-services.json
 
 # Android Profiling
 *.hprof
+
+# Clipper Engine
+engine/.venv/
+engine/saida/
+engine/.env
+__pycache__/
+.pytest_cache/
+graphify-out/
