@@ -2,7 +2,7 @@ import hashlib
 import json
 from pathlib import Path
 
-from . import boundaries, captions, config, media, package, reframe, render
+from . import boundaries, captions, cleanup, config, media, package, reframe, render
 from .select import select as gemini_select
 from .transcribe import transcribe as whisper_transcribe
 
@@ -33,7 +33,8 @@ def chapters(highlights):
 
 
 def run(source, out_root=None, per_day=3, on_progress=lambda stage, pct: None,
-        transcribe=whisper_transcribe, select=gemini_select, limits=None):
+        transcribe=whisper_transcribe, select=gemini_select, limits=None,
+        tema="", duracao="0-1", quadrado=False, limpeza=True):
     out_root = Path(out_root or config.OUT)
     out_root.mkdir(parents=True, exist_ok=True)
     on_progress("ingestao", 0)
@@ -48,41 +49,64 @@ def run(source, out_root=None, per_day=3, on_progress=lambda stage, pct: None,
     def make_transcript():
         wav = work / "audio.wav"
         media.extract_audio(video, wav)
-        result = transcribe(wav, config.WHISPER_MODEL, info["duration"], lambda p: on_progress("transcricao", p))
+        result = transcribe(wav, config.WHISPER_MODEL, info["duration"], lambda p: on_progress("transcricao", p),
+                            config.BRAND.get("vocabulario", []))
         wav.unlink()
         return result
 
     on_progress("transcricao", 0)
     words = cached(work / "transcricao.json", make_transcript)["words"]
     on_progress("selecao", 0)
-    raw = cached(work / "selecao.json", lambda: select(words, info["duration"]))
-    plan = boundaries.refine(raw, words, info["duration"], **(limits or {}))
+    key = hashlib.sha1(f"{tema}|{duracao}".encode()).hexdigest()[:6]  # outro tema/duração = outra seleção
+    raw = cached(work / f"selecao-{key}.json", lambda: select(words, info["duration"], tema, duracao))
+    plan = boundaries.refine(raw, words, info["duration"], **{"clip_range": config.DURATIONS[duracao], **(limits or {})})
+    sizes = {"9:16": (1080, 1920), **({"1:1": (1080, 1080)} if quadrado else {})}
 
     for i, clip in enumerate(plan["clips"], 1):
         on_progress("cortes", (i - 1) / len(plan["clips"]))
-        clip["file"] = f"cortes/{i:02d}.mp4"
-        out = work / clip["file"]
-        if not out.exists():
-            ass = captions.build_ass(captions.words_between(words, clip["start"], clip["end"]), clip["hook"])
-            x = reframe.face_x(video, clip["start"], clip["end"]) if info["width"] > info["height"] else None
-            render.vertical(video, clip["start"], clip["end"], ass, x, out, info)
+        start, end = clip["start"], clip["end"]
+        rel = captions.words_between(words, start, end)
+        segs = cleanup.segments(rel, end - start) if limpeza else [(0, round(end - start, 3))]
+        spoken = cleanup.remap_words(rel, segs)
+        clip["duracao"] = round(sum(e - s for s, e in segs), 2)
+        clip["formatos"], track = {}, False
+        for fmt, (w, h) in sizes.items():
+            # o nome carrega trecho e opções: rodar de novo com outras opções não reaproveita o vídeo errado
+            name = f"cortes/{int(start * 100)}-{int(end * 100)}-{fmt.replace(':', 'x')}{'-limpo' if limpeza else ''}.mp4"
+            clip["formatos"][fmt] = name
+            if (work / name).exists():
+                continue
+            if track is False:
+                found = reframe.track(video, start, end, info) if info["width"] > info["height"] else None
+                track = [(cleanup.remap(t, segs), x) for t, x in found] if found else None
+            overlays = [(png, x, y, s, e) for char, x, y, size, s, e in
+                        captions.emoji_overlays(spoken, clip.get("emojis", []), w, h)
+                        if (png := render.emoji_png(char, work / "marca", size))]
+            if logo := render.logo_png(work / "marca", 160):
+                overlays.append((logo, w - 200, 40, 0, None))
+            ass = captions.build_ass(spoken, clip["hook"], w, h, keywords=clip.get("keywords", []))
+            render.vertical(video, start, end, ass, track, work / name, info, (w, h), segs, overlays)
+        clip["file"] = clip["formatos"]["9:16"]
 
     compilation = None
     if plan["highlights"]:
         folder = work / "compilados"
         folder.mkdir(exist_ok=True)
-        final = folder / "melhores-momentos.mp4"
+        key = hashlib.sha1(str([(h["start"], h["end"]) for h in plan["highlights"]]).encode()).hexdigest()[:6]
+        final = folder / f"melhores-momentos-{key}.mp4"
+        logo = render.logo_png(work / "marca", 200)
         if not final.exists():
             parts = []
             for i, h in enumerate(plan["highlights"]):
                 on_progress("compilado", i / len(plan["highlights"]))
                 parts.append(folder / f"parte{i:02d}.mp4")
-                render.horizontal(video, h["start"], h["end"], captions.build_ass([], h["title"], 1920, 1080), parts[-1])
+                render.horizontal(video, h["start"], h["end"], captions.build_ass([], h["title"], 1920, 1080), parts[-1],
+                                  [(logo, 1680, 40, 0, None)] if logo else ())
             render.concat(parts, final)
         text = chapters(plan["highlights"])
         if text:
             (folder / "capitulos.txt").write_text(text, encoding="utf-8")
-        compilation = {"file": "compilados/melhores-momentos.mp4", "segundos": plan["compilado_segundos"],
+        compilation = {"file": f"compilados/{final.name}", "segundos": plan["compilado_segundos"],
                        "capitulos": text,
                        "na_regra_8_12_min": plan["compilado_na_regra"], "momentos": plan["highlights"]}
 

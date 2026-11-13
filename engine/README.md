@@ -25,7 +25,25 @@ Depois cole sua chave do Gemini em `engine\.env` (grátis em https://aistudio.go
 cd engine
 uv run clipper cortar "C:\Videos\podcast.mp4" --por-dia 3
 uv run clipper cortar "https://www.youtube.com/watch?v=..."
+uv run clipper cortar video.mp4 --tema "dicas de dinheiro" --duracao 1-3 --quadrado
 ```
+
+| Opção | O que faz |
+|---|---|
+| `--tema "..."` | só cortes sobre esse assunto (a nota mede o quanto o trecho fala dele) |
+| `--duracao` | `0-1` (padrão), `1-3`, `3-5`, `5-10` ou `10-15` minutos por corte |
+| `--quadrado` | gera também a versão 1:1, na pasta `quadrado/` |
+| `--sem-limpeza` | não tira pausas longas nem hesitações ("hã", "hum") |
+
+Na aba **Cortes** do app os mesmos campos aparecem abaixo do botão de arquivo.
+
+### O que cada corte vertical tem
+
+- **Recorte que segue quem fala**: com duas ou mais pessoas, o corte vai para quem está mexendo a boca
+  e só troca depois de 1,5 s, para não pular a cada interjeição. Sem rosto, vídeo inteiro sobre fundo desfocado.
+- **Legenda** palavra a palavra, com as palavras-chave em outra cor e até 3 **emojis** coloridos.
+- **Pausas e hesitações removidas** (pausas acima de 0,6 s ficam com 0,15 s). "é", "tipo", "né" e "um"
+  não são removidos, porque em português também são palavras.
 
 ## O que sai
 
@@ -38,6 +56,13 @@ engine/saida/<video>/
 ```
 
 Se o processo cair, rode de novo: transcrição, seleção e cortes já prontos são reaproveitados.
+
+## Modelo de marca (opcional)
+
+Copie `engine/marca.example.json` para `engine/marca.json` e ajuste: fonte (precisa estar instalada
+no Windows), cores, altura da legenda (fração da altura, a partir de baixo), logo (PNG, caminho a
+partir da pasta `engine`) e `vocabulario`: nomes que o Whisper deve escrever certo. Se mudar o
+vocabulário depois de processar um vídeo, apague o `transcricao.json` da pasta dele para transcrever de novo.
 
 ## Enviar para o YouTube
 
@@ -71,9 +96,9 @@ Durações e limites por plataforma ficam em `clipper_engine/config.py`.
 
 ## Limites conhecidos
 
-- O recorte vertical usa uma posição fixa por corte, centrada no rosto principal; ele não acompanha
-  quem fala quando duas pessoas alternam. Sem rosto visível, usa o vídeo inteiro sobre fundo desfocado
-  (isso também acontece se o caminho do arquivo tiver acentos e o OpenCV não conseguir abri-lo no Windows).
+- Seguir quem fala usa o movimento da boca: quem escuta mexendo muito a cabeça pode confundir. Perfil
+  e rostos pequenos às vezes não são detectados; aí o corte usa o fundo desfocado.
+- Emojis coloridos usam a fonte de emoji do Windows (Segoe UI Emoji). Sem ela, o corte sai sem emoji.
 - Vídeo com menos de ~20 min pode não render um compilado de 8 min; o manifesto avisa.
 - TikTok e Instagram: envio manual. YouTube: pelo comando `enviar`, sempre como privado.
 

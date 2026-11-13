@@ -26,7 +26,8 @@ def worker():
         try:
             db.update(job_id, status="processando")
             folder, _ = pipeline.run(job["source"], per_day=job["per_day"],
-                                     on_progress=lambda stage, pct: db.update(job_id, stage=stage, pct=pct))
+                                     on_progress=lambda stage, pct: db.update(job_id, stage=stage, pct=pct),
+                                     **json.loads(job["opcoes"] or "{}"))
             db.update(job_id, status="pronto", pct=1, folder=folder.name)
         except Exception as err:  # o worker não pode morrer por causa de um vídeo
             db.update(job_id, status="erro", error=str(err)[-600:])
@@ -67,6 +68,10 @@ def view(job):
 class NewJob(BaseModel):
     source: str
     per_day: int = 3
+    tema: str = ""
+    duracao: str = "0-1"
+    quadrado: bool = False
+    limpeza: bool = True
 
 
 @app.get("/health")
@@ -89,7 +94,11 @@ async def upload(request: Request, name: str):
 def create(body: NewJob):
     if not body.source.startswith(("http://", "https://")) and not Path(body.source).is_file():
         raise HTTPException(400, "arquivo não encontrado")
-    job_id = db.create(body.source, max(body.per_day, 1))
+    if body.duracao not in config.DURATIONS:
+        raise HTTPException(400, f"duração inválida; use uma de {', '.join(config.DURATIONS)}")
+    job_id = db.create(body.source, max(body.per_day, 1),
+                       {"tema": body.tema.strip()[:200], "duracao": body.duracao, "quadrado": body.quadrado,
+                        "limpeza": body.limpeza})
     jobs.put(job_id)
     return db.get(job_id)
 

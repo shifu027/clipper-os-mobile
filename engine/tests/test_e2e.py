@@ -5,15 +5,17 @@ import time
 import pytest
 from fastapi.testclient import TestClient
 
-from clipper_engine import api, config, db, media, pipeline
+from clipper_engine import api, captions, config, db, media, pipeline, render
 
-WORDS = [{"w": f"palavra{i}", "s": i * 0.5, "e": i * 0.5 + 0.4} for i in range(240)]
+# palavras a cada 0,5 s, sem as de 10 a 13 s: o corte 1 tem uma pausa de 2,6 s para a limpeza tirar
+WORDS = [{"w": f"palavra{i}", "s": i * 0.5, "e": i * 0.5 + 0.4} for i in range(240) if not 20 <= i <= 25]
 
 
-def fake_select(words, duration):
+def fake_select(words, duration, tema, duracao):
     def clip(start, end, score):
         return {"start": start, "end": end, "title": f"Corte aos {start}s", "hook": "Olha isso", "description": "desc",
-                "hashtags": ["teste"], "hook_score": score, "retention": score, "value": score, "share": score}
+                "hashtags": ["teste"], "hook_score": score, "retention": score, "value": score, "share": score,
+                "keywords": ["palavra14"], "emojis": [{"word": "palavra16", "emoji": "🔥"}]}
     return {"clips": [clip(5, 30, 90), clip(40, 62, 70)],
             "highlights": [{"start": 70, "end": 82, "title": "Momento A", "score": 90},
                            {"start": 86, "end": 98, "title": "Momento B", "score": 80},
@@ -28,36 +30,50 @@ def video(tmp_path_factory):
     return path
 
 
-def run(video, out, real=pipeline.run):
+def run(video, out, real=pipeline.run, **opts):
     return real(video, out, per_day=1, transcribe=lambda *a: {"words": WORDS}, select=fake_select,
-                        limits={"clip_range": (15, 40), "comp_range": (30, 40)})
+                limits={"clip_range": (15, 40), "comp_range": (30, 40)}, **opts)
 
 
-def test_pipeline_delivers_platform_folders(video, tmp_path):
-    work, manifest = run(video, tmp_path)
+def test_pipeline_delivers_platform_folders(video, tmp_path, monkeypatch):
+    from PIL import Image
+    Image.new("RGBA", (300, 100), "red").save(tmp_path / "logo.png")
+    monkeypatch.setattr(config, "BRAND", {"logo": str(tmp_path / "logo.png")})
+    work, manifest = run(video, tmp_path, quadrado=True)
     first = media.probe(work / manifest["clips"][0]["files"]["shorts"])
     assert (first["width"], first["height"]) == (1080, 1920)
-    assert 24 <= first["duration"] <= 27
+    assert 21.5 <= first["duration"] <= 23.5 and manifest["clips"][0]["duracao"] < 23.5  # 25 s - pausa de 2,6 s
+    square = media.probe(work / manifest["clips"][0]["files"]["quadrado"])
+    assert (square["width"], square["height"]) == (1080, 1080)
+    assert list((work / "marca").glob("emoji-*.png")) and (work / "marca/logo-160.png").exists()
     assert {p.name for p in work.iterdir()} >= {"shorts", "reels", "tiktok", "compilados", "lotes.csv", "manifesto.json"}
     assert len(list((work / "tiktok").glob("*.mp4"))) == 2 and len(list((work / "tiktok").glob("*.txt"))) == 2
-    comp = media.probe(work / "compilados/melhores-momentos.mp4")
+    comp = media.probe(work / manifest["compilado"]["file"])
     assert (comp["width"], comp["height"]) == (1920, 1080)
     assert 35 <= comp["duration"] <= 39
     assert (work / "compilados/capitulos.txt").read_text().startswith("00:00 Momento A\n00:12 Momento B")
     assert [c["lote"] for c in manifest["clips"]] == [1, 2]
 
-    again, _ = run(video, tmp_path)  # segunda rodada reaproveita tudo
+    again, _ = run(video, tmp_path, quadrado=True)  # segunda rodada reaproveita tudo
     assert again == work
+
+
+def test_crop_that_follows_the_speaker_renders(video, tmp_path):
+    out = tmp_path / "seguindo.mp4"
+    render.vertical(video, 0, 4, captions.build_ass([], "", brand={}), [(0.0, 0.2), (2.0, 0.8)], out, media.probe(video))
+    info = media.probe(out)
+    assert (info["width"], info["height"]) == (1080, 1920) and 3.5 <= info["duration"] <= 4.5
 
 
 def test_api_runs_a_job(video, tmp_path, monkeypatch):
     monkeypatch.setattr(config, "OUT", tmp_path)
-    monkeypatch.setattr(pipeline, "run", lambda source, per_day, on_progress: run(source, tmp_path))
+    monkeypatch.setattr(pipeline, "run", lambda source, per_day, on_progress, **opts: run(source, tmp_path, **opts))
     with TestClient(api.app, base_url="http://127.0.0.1") as client:
         assert client.post("/jobs", json={"source": "nao-existe.mp4"}).status_code == 400
         assert client.get("/health", headers={"origin": "https://evil.example"}).status_code == 403
         assert client.get("/health", headers={"host": "evil.example"}).status_code == 400
-        job = client.post("/jobs", json={"source": str(video)}).json()
+        assert client.post("/jobs", json={"source": str(video), "duracao": "2-4"}).status_code == 400
+        job = client.post("/jobs", json={"source": str(video), "tema": "teste", "limpeza": False}).json()
         for _ in range(600):
             state = client.get(f"/jobs/{job['id']}").json()
             if state["status"] in ("pronto", "erro"):

@@ -1,0 +1,9 @@
+{
+  "fonte": "Montserrat",
+  "cor_legenda": "#FFFFFF",
+  "cor_fala": "#FFE500",
+  "cor_destaque": "#3CFF7A",
+  "altura_legenda": 0.24,
+  "logo": "logo.png",
+  "vocabulario": ["Clipper OS", "nomes do seu canal", "convidados"]
+}

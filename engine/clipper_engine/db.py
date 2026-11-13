@@ -1,3 +1,4 @@
+import json
 import sqlite3
 import time
 import uuid
@@ -11,13 +12,16 @@ def _db():
     db.row_factory = sqlite3.Row
     db.execute("""CREATE TABLE IF NOT EXISTS jobs (id TEXT PRIMARY KEY, source TEXT, per_day INTEGER, status TEXT,
                   stage TEXT, pct REAL, folder TEXT, error TEXT, created REAL)""")
+    if "opcoes" not in {r[1] for r in db.execute("PRAGMA table_info(jobs)")}:
+        db.execute("ALTER TABLE jobs ADD COLUMN opcoes TEXT DEFAULT '{}'")  # bancos criados pela versão anterior
     return db
 
 
-def create(source, per_day):
+def create(source, per_day, opcoes):
     job_id = uuid.uuid4().hex[:12]
     with _db() as db:
-        db.execute("INSERT INTO jobs VALUES (?,?,?,'fila','',0,'','',?)", (job_id, source, per_day, time.time()))
+        db.execute("INSERT INTO jobs (id, source, per_day, status, stage, pct, folder, error, created, opcoes) "
+                   "VALUES (?,?,?,'fila','',0,'','',?,?)", (job_id, source, per_day, time.time(), json.dumps(opcoes)))
     return job_id
 
 
