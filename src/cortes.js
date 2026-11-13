@@ -50,7 +50,18 @@ function watch(id) {
   events.onerror = () => { events.close(); online = false; refresh(); };
 }
 
+function options() {
+  const val = (id) => document.getElementById(id);
+  return {
+    tema: val('ct-tema').value.trim(),
+    duracao: val('ct-duracao').value,
+    quadrado: val('ct-quadrado').checked,
+    limpeza: val('ct-limpeza').checked,
+  };
+}
+
 async function start(source) {
+  const opts = options(); // lê antes de trocar a tela: o upload re-renderiza e some com o formulário
   try {
     if (source instanceof File) {
       uploading = true;
@@ -60,7 +71,7 @@ async function start(source) {
     job = await api('/jobs', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ source, per_day: parseInt(app.state.config.frequency) || 3 }),
+      body: JSON.stringify({ source, per_day: parseInt(app.state.config.frequency) || 3, ...opts }),
     });
     watch(job.id);
   } catch (err) {
@@ -76,7 +87,7 @@ function sendToVault() {
   app.state.videoAssets.push(...fresh.map((c) => ({
     id: generateId(),
     title: c.title,
-    duration: mmss(c.end - c.start),
+    duration: mmss(c.duracao ?? c.end - c.start),
     status: 'pronto',
     sourceProvider: 'Clipper Engine',
     sourceFolder: `Lote ${c.lote} · nota ${c.score}`,
@@ -113,6 +124,20 @@ function form() {
       <input id="ct-url" class="ct-input" type="url" placeholder="ou cole um link do YouTube">
       <button data-cortes="url" class="vm-btn-secondary">Cortar link</button>
     </div>
+    <div class="ct-row">
+      <label class="sr-only" for="ct-tema">Tema</label>
+      <input id="ct-tema" class="ct-input" maxlength="200" placeholder="Tema opcional: só cortes sobre… (ex.: dicas de dinheiro)">
+      <label class="ct-field">Duração
+        <select id="ct-duracao" class="ct-input ct-select">
+          <option value="0-1">até 1 min</option><option value="1-3">1–3 min</option><option value="3-5">3–5 min</option>
+          <option value="5-10">5–10 min</option><option value="10-15">10–15 min</option>
+        </select>
+      </label>
+    </div>
+    <div class="ct-row ct-checks">
+      <label><input type="checkbox" id="ct-limpeza" checked> Tirar pausas e hesitações</label>
+      <label><input type="checkbox" id="ct-quadrado"> Gerar também 1:1 (feed)</label>
+    </div>
   </div>`;
 }
 
@@ -139,7 +164,7 @@ function results() {
   const cards = clips.map((c) => `<article class="vm-card ct-card">
     <video src="${base}${c.file}#t=0.5" controls preload="metadata" playsinline></video>
     <div class="ct-card-body">
-      <div class="ct-card-top"><span class="ct-score" title="Nota de viralidade">${c.score}</span><span class="ct-lote">Lote ${c.lote} · ${mmss(c.end - c.start)}</span></div>
+      <div class="ct-card-top"><span class="ct-score" title="Nota de viralidade">${c.score}</span><span class="ct-lote">Lote ${c.lote} · ${mmss(c.duracao ?? c.end - c.start)}</span></div>
       <p class="ct-card-title">${escapeHtml(c.title)}</p>
       <p class="ct-note">${c.platforms.join(' · ')}</p>
     </div>

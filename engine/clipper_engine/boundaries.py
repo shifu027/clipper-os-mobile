@@ -32,7 +32,7 @@ def _fit(item, words, duration):
     return {**item, "start": round(start, 2), "end": round(end, 2)}
 
 
-def refine(raw, words, duration, clip_range=(config.CLIP_MIN, config.CLIP_MAX),
+def refine(raw, words, duration, clip_range=config.DURATIONS["0-1"],
            comp_range=(config.COMP_MIN, config.COMP_MAX)):
     clips = []
     for item in raw["clips"]:
