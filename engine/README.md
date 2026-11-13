@@ -28,6 +28,11 @@ uv run clipper cortar "https://www.youtube.com/watch?v=..."
 uv run clipper cortar video.mp4 --tema "dicas de dinheiro" --duracao 1-3 --quadrado
 ```
 
+**Link do YouTube:** precisa do **Deno** instalado (o instalador já faz isso), porque o YouTube passou
+a exigir um programa JavaScript para baixar. Se o download falhar, a mensagem diz o motivo: vídeo
+privado, restrição de idade, "não é um robô" (tente mais tarde) ou Deno ausente. Em último caso, baixe
+o vídeo e envie o arquivo. Use só vídeos seus ou que você tem permissão para usar.
+
 | Opção | O que faz |
 |---|---|
 | `--tema "..."` | só cortes sobre esse assunto (a nota mede o quanto o trecho fala dele) |

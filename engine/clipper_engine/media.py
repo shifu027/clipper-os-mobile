@@ -1,5 +1,6 @@
 import json
 import re
+import shutil
 import subprocess
 from pathlib import Path
 
@@ -50,13 +51,31 @@ def extract_audio(video, wav: Path):
     run(["ffmpeg", "-y", "-v", "error", "-i", video, "-vn", "-ac", "1", "-ar", "16000", wav])
 
 
+# trecho do erro do yt-dlp (minúsculo) -> o que dizer
+DOWNLOAD_ERRORS = [
+    ("private video", "Esse vídeo é privado. Use um vídeo público ou não listado, ou baixe e envie o arquivo."),
+    ("confirm your age", "O YouTube exige login para esse vídeo (restrição de idade). Baixe e envie o arquivo."),
+    ("not a bot", "O YouTube pediu para confirmar que não é um robô. Tente de novo mais tarde, ou baixe e envie o arquivo."),
+    ("video unavailable", "Vídeo indisponível: confira o link (pode ter sido removido ou bloqueado no seu país)."),
+]
+
+
 def download(url, folder: Path):
     import yt_dlp
+
     opts = {"outtmpl": str(folder / "%(title).80s [%(id)s].%(ext)s"), "format": "bv*[height<=1080]+ba/b",
             "merge_output_format": "mp4", "quiet": True, "noplaylist": True}
-    with yt_dlp.YoutubeDL(opts) as ydl:
-        info = ydl.extract_info(url, download=True)
-        return Path(ydl.prepare_filename(info)).with_suffix(".mp4")
+    try:
+        with yt_dlp.YoutubeDL(opts) as ydl:
+            info = ydl.extract_info(url, download=True)
+            return Path(ydl.prepare_filename(info)).with_suffix(".mp4")
+    except yt_dlp.utils.DownloadError as err:
+        text = str(err).lower()
+        message = next((m for key, m in DOWNLOAD_ERRORS if key in text), None)
+        if not message and not shutil.which("deno"):
+            # desde 2025 o YouTube exige um programa JavaScript; o yt-dlp usa o Deno por padrão
+            message = "Falta o Deno, que o YouTube passou a exigir. Rode scripts\\setup-windows.ps1 de novo."
+        raise RuntimeError(message or f"Não consegui baixar o vídeo: {err}") from err
 
 
 def scene_cuts(video, threshold=0.35):

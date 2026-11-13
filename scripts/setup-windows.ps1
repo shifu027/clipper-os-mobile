@@ -14,6 +14,7 @@ function Need($cmd, $id) {
 Need ffmpeg Gyan.FFmpeg
 Need uv astral-sh.uv
 Need node OpenJS.NodeJS.LTS
+Need deno DenoLand.Deno  # o YouTube exige um programa JavaScript para baixar vídeos
 # winget só atualiza o PATH de terminais novos
 $env:Path = [Environment]::GetEnvironmentVariable("Path", "Machine") + ";" + [Environment]::GetEnvironmentVariable("Path", "User")
 
