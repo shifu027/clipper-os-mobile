@@ -28,6 +28,11 @@ uv run clipper cortar "https://www.youtube.com/watch?v=..."
 uv run clipper cortar video.mp4 --tema "dicas de dinheiro" --duracao 1-3 --quadrado
 ```
 
+**Link do YouTube:** precisa do **Deno** instalado (o instalador já faz isso), porque o YouTube passou
+a exigir um programa JavaScript para baixar. Se o download falhar, a mensagem diz o motivo: vídeo
+privado, restrição de idade, "não é um robô" (tente mais tarde) ou Deno ausente. Em último caso, baixe
+o vídeo e envie o arquivo. Use só vídeos seus ou que você tem permissão para usar.
+
 | Opção | O que faz |
 |---|---|
 | `--tema "..."` | só cortes sobre esse assunto (a nota mede o quanto o trecho fala dele) |
@@ -42,6 +47,8 @@ Na aba **Cortes** do app os mesmos campos aparecem abaixo do botão de arquivo.
 - **Recorte que segue quem fala**: com duas ou mais pessoas, o corte vai para quem está mexendo a boca
   e só troca depois de 1,5 s, para não pular a cada interjeição. Sem rosto, vídeo inteiro sobre fundo desfocado.
 - **Legenda** palavra a palavra, com as palavras-chave em outra cor e até 3 **emojis** coloridos.
+- **Bordas nas trocas de cena**: se o corte começaria ou terminaria alguns quadros depois de uma troca
+  de câmera, a borda vai para a troca (nunca corta fala). As trocas são detectadas uma vez por vídeo.
 - **Pausas e hesitações removidas** (pausas acima de 0,6 s ficam com 0,15 s). "é", "tipo", "né" e "um"
   não são removidos, porque em português também são palavras.
 
@@ -98,6 +105,7 @@ Durações e limites por plataforma ficam em `clipper_engine/config.py`.
 
 - Seguir quem fala usa o movimento da boca: quem escuta mexendo muito a cabeça pode confundir. Perfil
   e rostos pequenos às vezes não são detectados; aí o corte usa o fundo desfocado.
+- Trocas de cena suaves (fade, zoom) não são detectadas, e luz piscando pode ser lida como troca.
 - Emojis coloridos usam a fonte de emoji do Windows (Segoe UI Emoji). Sem ela, o corte sai sem emoji.
 - Vídeo com menos de ~20 min pode não render um compilado de 8 min; o manifesto avisa.
 - TikTok e Instagram: envio manual. YouTube: pelo comando `enviar`, sempre como privado.

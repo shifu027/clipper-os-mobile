@@ -1,6 +1,9 @@
 import json
 
-from clipper_engine import boundaries, captions, cleanup, package, pipeline, reframe, render, select, youtube
+import pytest
+import yt_dlp
+
+from clipper_engine import media, boundaries, captions, cleanup, package, pipeline, reframe, render, select, youtube
 
 WORDS = [{"w": f"p{i}", "s": i * 0.5, "e": i * 0.5 + 0.4} for i in range(2400)]  # 20 min, palavra a cada 0,5 s
 WORDS[100]["s"] = 50.3  # pausa de 0,4 s antes da palavra 100 (a 99 termina em 49,9)
@@ -124,3 +127,35 @@ def test_speaker_tracking_follows_who_talks_and_ignores_blips():
 
 def test_crop_follows_track_with_hard_cuts():
     assert render.crop_x([(0.0, 0.3), (5.0, 0.7)], 1920, 608) == "if(lt(t,5.00),272,1040)"
+
+
+def test_scene_cut_removes_stray_frames_but_never_speech():
+    words = [{"w": "a", "s": 10.5, "e": 11.0}, {"w": "b", "s": 40.0, "e": 40.6}]
+    raw = {"clips": [clip(10.2, 40.9)], "highlights": []}
+    [c] = boundaries.refine(raw, words, 100, clip_range=(20, 60), cuts=[10.45, 40.8])["clips"]
+    assert (c["start"], c["end"]) == (10.45, 40.8)
+    [c] = boundaries.refine(raw, words, 100, clip_range=(20, 60), cuts=[10.7, 40.3])["clips"]  # trocas no meio da fala
+    assert (c["start"], c["end"]) == (10.4, 40.8)
+
+
+def failing_ydl(message):
+    class Failing:
+        def __init__(self, opts): pass
+        def __enter__(self): return self
+        def __exit__(self, *a): return False
+        def extract_info(self, *a, **k): raise yt_dlp.utils.DownloadError(message)
+    return Failing
+
+
+@pytest.mark.parametrize("error, expected", [
+    ("ERROR: [youtube] abc: Private video. Sign in if you've been granted access", "privado"),
+    ("ERROR: [youtube] abc: Sign in to confirm your age.", "restrição de idade"),
+    ("ERROR: [youtube] abc: Sign in to confirm you\u2019re not a bot.", "não é um robô"),
+    ("ERROR: [youtube] abc: Video unavailable", "indisponível"),
+    ("ERROR: n challenge solving failed", "Deno"),
+])
+def test_download_errors_are_explained(monkeypatch, tmp_path, error, expected):
+    monkeypatch.setattr(yt_dlp, "YoutubeDL", failing_ydl(error))
+    monkeypatch.setattr(media.shutil, "which", lambda name: None)
+    with pytest.raises(RuntimeError, match=expected):
+        media.download("https://youtu.be/abc", tmp_path)

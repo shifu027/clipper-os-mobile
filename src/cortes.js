@@ -57,6 +57,7 @@ function options() {
     duracao: val('ct-duracao').value,
     quadrado: val('ct-quadrado').checked,
     limpeza: val('ct-limpeza').checked,
+    cor: val('ct-cor').checked,
   };
 }
 
@@ -137,6 +138,7 @@ function form() {
     <div class="ct-row ct-checks">
       <label><input type="checkbox" id="ct-limpeza" checked> Tirar pausas e hesitações</label>
       <label><input type="checkbox" id="ct-quadrado"> Gerar também 1:1 (feed)</label>
+      <label><input type="checkbox" id="ct-cor"> Realçar cores</label>
     </div>
   </div>`;
 }

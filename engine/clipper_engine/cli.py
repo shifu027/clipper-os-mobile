@@ -14,6 +14,7 @@ def main():
     cut.add_argument("--duracao", default="0-1", choices=config.DURATIONS, help="minutos de cada corte")
     cut.add_argument("--quadrado", action="store_true", help="gera também versão 1:1")
     cut.add_argument("--sem-limpeza", action="store_true", help="não tira pausas e hesitações")
+    cut.add_argument("--realcar-cor", action="store_true", help="realce leve de contraste e cor")
     send = sub.add_parser("enviar", help="envia um lote para o YouTube como privado")
     send.add_argument("pasta")
     send.add_argument("--lote", type=int, help="número do lote (veja lotes.csv)")
@@ -36,7 +37,7 @@ def main():
     folder, manifest = pipeline.run(args.video, args.saida, args.por_dia,
                                     on_progress=lambda stage, pct: print(f"\r{stage:<12} {pct:4.0%}", end="", flush=True),
                                     tema=args.tema, duracao=args.duracao, quadrado=args.quadrado,
-                                    limpeza=not args.sem_limpeza)
+                                    limpeza=not args.sem_limpeza, cor=args.realcar_cor)
     comp = manifest["compilado"]
     print(f"\n{len(manifest['clips'])} cortes" + (f" + compilado de {comp['segundos'] // 60} min" if comp else ""))
     print(f"Pasta: {folder}")

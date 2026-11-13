@@ -26,17 +26,22 @@ def overlap(a, b):
     return shared / min(a["end"] - a["start"], b["end"] - b["start"])
 
 
-def _fit(item, words, duration):
+def _fit(item, words, duration, cuts=()):
     start = max(0, snap(item["start"], words, "s") - 0.1)
     end = min(duration, snap(item["end"], words, "e") + 0.2)
+    spoken = [w for w in words if start <= w["s"] and w["e"] <= end]
+    if spoken:
+        # troca de cena entre a borda e a fala: a borda vai para a troca, sem os quadros soltos da outra tomada
+        start = max((c for c in cuts if start < c <= spoken[0]["s"]), default=start)
+        end = min((c for c in cuts if spoken[-1]["e"] <= c < end), default=end)
     return {**item, "start": round(start, 2), "end": round(end, 2)}
 
 
 def refine(raw, words, duration, clip_range=config.DURATIONS["0-1"],
-           comp_range=(config.COMP_MIN, config.COMP_MAX)):
+           comp_range=(config.COMP_MIN, config.COMP_MAX), cuts=()):
     clips = []
     for item in raw["clips"]:
-        clip = _fit(item, words, duration)
+        clip = _fit(item, words, duration, cuts)
         clip["score"] = round(.35 * clip["hook_score"] + .3 * clip["retention"] + .2 * clip["value"] + .15 * clip["share"])
         if clip_range[0] - 5 <= clip["end"] - clip["start"] <= clip_range[1] + 15:
             clips.append(clip)
@@ -47,7 +52,7 @@ def refine(raw, words, duration, clip_range=config.DURATIONS["0-1"],
             kept.append(clip)
 
     # Compilado: melhores momentos sem sobreposição, completados com cortes até caber em comp_range.
-    pool = sorted((_fit(h, words, duration) for h in raw["highlights"]), key=lambda h: -h["score"])
+    pool = sorted((_fit(h, words, duration, cuts) for h in raw["highlights"]), key=lambda h: -h["score"])
     pool += [{"start": c["start"], "end": c["end"], "title": c["title"], "score": c["score"]} for c in kept]
     highlights, total = [], 0
     for item in pool:
