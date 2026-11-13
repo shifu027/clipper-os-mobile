@@ -74,7 +74,7 @@ def download(url, folder: Path):
         message = next((m for key, m in DOWNLOAD_ERRORS if key in text), None)
         if not message and not shutil.which("deno"):
             # desde 2025 o YouTube exige um programa JavaScript; o yt-dlp usa o Deno por padrão
-            message = "Falta o Deno, que o YouTube passou a exigir. Rode scripts\\setup-windows.ps1 de novo."
+            message = "Falta o Deno, que o YouTube passou a exigir. Rode scripts\\setup-windows.bat de novo."
         raise RuntimeError(message or f"Não consegui baixar o vídeo: {err}") from err
 
 
