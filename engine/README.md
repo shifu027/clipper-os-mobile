@@ -8,8 +8,10 @@ Sem Docker. Transcrição local (faster-whisper), seleção dos momentos pelo Ge
 
 ## Instalar (Windows 11)
 
-```powershell
-powershell -ExecutionPolicy Bypass -File scripts\setup-windows.ps1
+No CMD (não precisa de PowerShell), na raiz do repositório — ou dê dois cliques no arquivo:
+
+```bat
+scripts\setup-windows.bat
 ```
 
 Depois cole sua chave do Gemini em `engine\.env` (grátis em https://aistudio.google.com/apikey).
