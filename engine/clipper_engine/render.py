@@ -5,6 +5,7 @@ from .media import encode, run
 
 AUDIO = ["-c:a", "aac", "-b:a", "160k", "-ar", "48000", "-movflags", "+faststart"]
 LOUD = "loudnorm=I=-14:TP=-1.5:LRA=11"
+GRADE = "eq=contrast=1.06:saturation=1.12:gamma=0.98"  # realce leve de contraste e cor
 EMOJI_FONTS = [r"C:\Windows\Fonts\seguiemj.ttf", "/usr/share/fonts/truetype/noto/NotoColorEmoji.ttf",
                "/System/Library/Fonts/Apple Color Emoji.ttc"]
 
@@ -52,7 +53,7 @@ def crop_x(track, w, crop_w):
     return expr
 
 
-def vertical(src, start, end, ass, track, out: Path, info, size=(1080, 1920), segs=None, overlays=()):
+def vertical(src, start, end, ass, track, out: Path, info, size=(1080, 1920), segs=None, overlays=(), cor=False):
     """Corte vertical (ou quadrado). Com `track`: recorte seguindo quem fala. Sem rosto: vídeo inteiro sobre fundo desfocado."""
     w, h = info["width"], info["height"]
     tw, th = size
@@ -64,14 +65,14 @@ def vertical(src, start, end, ass, track, out: Path, info, size=(1080, 1920), se
     else:
         crop_w = int(h * tw / th) // 2 * 2
         vf = f"crop=w={crop_w}:h={h}:x='{crop_x(track, w, crop_w)}':y=0,scale={tw}:{th}"
-    _cut(src, start, end, ass, vf, LOUD, out, segs, overlays)
+    _cut(src, start, end, ass, f"{vf},{GRADE}" if cor else vf, LOUD, out, segs, overlays)
 
 
-def horizontal(src, start, end, ass, out: Path, overlays=()):
+def horizontal(src, start, end, ass, out: Path, overlays=(), cor=False):
     """Trecho 16:9 1920x1080 do compilado, com fade curto nas pontas."""
     d = end - start
     vf = ("scale=1920:1080:force_original_aspect_ratio=decrease,pad=1920:1080:(ow-iw)/2:(oh-ih)/2,"
-          f"fade=t=in:d=0.3,fade=t=out:st={d - 0.3:.2f}:d=0.3")
+          f"fade=t=in:d=0.3,fade=t=out:st={d - 0.3:.2f}:d=0.3" + (f",{GRADE}" if cor else ""))
     _cut(src, start, end, ass, vf, f"{LOUD},afade=t=in:d=0.3,afade=t=out:st={d - 0.3:.2f}:d=0.3", out, None, overlays)
 
 

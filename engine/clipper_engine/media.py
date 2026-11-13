@@ -1,4 +1,5 @@
 import json
+import re
 import subprocess
 from pathlib import Path
 
@@ -56,3 +57,11 @@ def download(url, folder: Path):
     with yt_dlp.YoutubeDL(opts) as ydl:
         info = ydl.extract_info(url, download=True)
         return Path(ydl.prepare_filename(info)).with_suffix(".mp4")
+
+
+def scene_cuts(video, threshold=0.35):
+    """Instantes (s) das trocas secas de câmera ou tomada. Uma passada em resolução baixa."""
+    log = subprocess.run(["ffmpeg", "-hide_banner", "-hwaccel", "auto", "-i", str(video), "-an", "-vf",
+                          f"fps=10,scale=320:-2,select='gt(scene,{threshold})',showinfo", "-f", "null", "-"],
+                         check=True, capture_output=True, text=True, errors="replace").stderr
+    return [round(float(t), 2) for t in re.findall(r"pts_time:([\d.]+)", log)]

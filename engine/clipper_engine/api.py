@@ -72,6 +72,7 @@ class NewJob(BaseModel):
     duracao: str = "0-1"
     quadrado: bool = False
     limpeza: bool = True
+    cor: bool = False
 
 
 @app.get("/health")
@@ -98,7 +99,7 @@ def create(body: NewJob):
         raise HTTPException(400, f"duração inválida; use uma de {', '.join(config.DURATIONS)}")
     job_id = db.create(body.source, max(body.per_day, 1),
                        {"tema": body.tema.strip()[:200], "duracao": body.duracao, "quadrado": body.quadrado,
-                        "limpeza": body.limpeza})
+                        "limpeza": body.limpeza, "cor": body.cor})
     jobs.put(job_id)
     return db.get(job_id)
 

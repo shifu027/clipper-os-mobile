@@ -82,3 +82,24 @@ def test_api_runs_a_job(video, tmp_path, monkeypatch):
         assert state["status"] == "pronto", state["error"]
         assert len(state["manifesto"]["clips"]) == 2
     assert db.get(job["id"])["folder"]
+
+
+def test_scene_cuts_finds_hard_cut(tmp_path):
+    out = tmp_path / "troca.mp4"
+    subprocess.run(["ffmpeg", "-v", "error", "-f", "lavfi", "-i", "color=c=red:s=640x360:d=3", "-f", "lavfi",
+                    "-i", "color=c=blue:s=640x360:d=3", "-filter_complex", "[0][1]concat=n=2", "-c:v", "libx264",
+                    "-preset", "ultrafast", str(out)], check=True)
+    [cut] = media.scene_cuts(out)
+    assert 2.9 <= cut <= 3.1
+
+
+def test_color_option_raises_saturation(video, tmp_path):
+    frames = {}
+    for cor in (False, True):
+        out = tmp_path / f"cor-{cor}.mp4"
+        render.horizontal(video, 0, 2, captions.build_ass([], "", 1920, 1080, brand={}), out, cor=cor)
+        stats = subprocess.run(["ffmpeg", "-v", "info", "-ss", "1", "-i", str(out), "-frames:v", "1", "-vf",
+                                "signalstats,metadata=print:key=lavfi.signalstats.SATAVG", "-f", "null", "-"],
+                               capture_output=True, text=True).stderr
+        frames[cor] = float(stats.split("SATAVG=")[1].split()[0])
+    assert frames[True] > frames[False] * 1.05

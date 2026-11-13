@@ -124,3 +124,12 @@ def test_speaker_tracking_follows_who_talks_and_ignores_blips():
 
 def test_crop_follows_track_with_hard_cuts():
     assert render.crop_x([(0.0, 0.3), (5.0, 0.7)], 1920, 608) == "if(lt(t,5.00),272,1040)"
+
+
+def test_scene_cut_removes_stray_frames_but_never_speech():
+    words = [{"w": "a", "s": 10.5, "e": 11.0}, {"w": "b", "s": 40.0, "e": 40.6}]
+    raw = {"clips": [clip(10.2, 40.9)], "highlights": []}
+    [c] = boundaries.refine(raw, words, 100, clip_range=(20, 60), cuts=[10.45, 40.8])["clips"]
+    assert (c["start"], c["end"]) == (10.45, 40.8)
+    [c] = boundaries.refine(raw, words, 100, clip_range=(20, 60), cuts=[10.7, 40.3])["clips"]  # trocas no meio da fala
+    assert (c["start"], c["end"]) == (10.4, 40.8)
